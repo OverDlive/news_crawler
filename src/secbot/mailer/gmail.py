@@ -1,5 +1,3 @@
-
-
 """
 secbot.mailer.gmail
 ~~~~~~~~~~~~~~~~~~~
@@ -84,11 +82,24 @@ def _build_body(
         adv.to_md() if hasattr(adv, "to_md") else f"- {adv}" for adv in advisories
     )
 
-    # IOC counts
+    # Malicious IOC details
     lines.append("\n[ Malicious IOC ]")
-    for k in ("ip", "hash", "url"):
-        sample = ", ".join(iocs.get(k, [])[:10])
-        lines.append(f"- {k.upper():>4}: {len(iocs.get(k, [])):4d}  e.g. {sample}")
+    # Sort IOC lists for display
+    ips = sorted(iocs.get("ip", []))
+    hashes = sorted(iocs.get("hash", []))
+    urls = sorted(iocs.get("url", []))
+
+    lines.append(f"- IP ({len(ips)}):")
+    for ip in ips:
+        lines.append(f"    - {ip}")
+
+    lines.append(f"- HASH ({len(hashes)}):")
+    for h in hashes:
+        lines.append(f"    - {h}")
+
+    lines.append(f"- URL ({len(urls)}):")
+    for u in urls:
+        lines.append(f"    - {u}")
 
     # Footer
     lines.append("\n— Sent automatically by SecBot\n")
