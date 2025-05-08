@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from typing import List
 
 import feedparser as _fp
+from dateutil import parser as _dtparser
 
 logger = logging.getLogger(__name__)
 
@@ -51,11 +52,17 @@ class NewsItem:
 def _parse_date(raw: str | None) -> _dt.date | None:
     if not raw:
         return None
+    # Try YYYY/MM/DD pattern first
     m = _DATE_RE.search(raw)
     if m:
-        # boannews RSS uses 'YYYY/MM/DD HH:MM:SS'
         return _dt.datetime.strptime(m.group(0), "%Y/%m/%d").date()
-    return None
+    # Fallback to RFC-822 style parsing
+    try:
+        dt = _dtparser.parse(raw)
+        return dt.date()
+    except Exception:
+        logger.warning("Unable to parse date: %s", raw)
+        return None
 
 
 def _fetch_feed(url: str) -> List[NewsItem]:

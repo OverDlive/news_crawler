@@ -22,7 +22,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import List, Optional
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, validator
 
 # -----------------------------------------------------------------------------
@@ -102,13 +102,16 @@ class Settings(BaseSettings):
     debug: bool = Field(False, env="SEC_BOT_DEBUG")
     data_dir: Path = Field(Path("./data"), env="SEC_BOT_DATA_DIR")
 
+
     # ------------------------------------------------------------------ #
-    # Model Config
+    # Model Config (Pydantic v2+)
     # ------------------------------------------------------------------ #
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",   # Ignore unknown env vars like sec_bot_*
+    )
 
     # ------------------------------------------------------------------ #
     # Validators

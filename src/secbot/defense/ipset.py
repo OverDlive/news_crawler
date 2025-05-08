@@ -1,5 +1,3 @@
-
-
 """
 secbot.defense.ipset
 ~~~~~~~~~~~~~~~~~~~~
@@ -34,6 +32,8 @@ import shutil
 import subprocess
 from pathlib import Path
 from typing import Iterable, List
+
+from secbot.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +102,10 @@ def block(ips: Iterable[str]) -> None:
     ips:
         Iterable of IPv4/IPv6 address strings.
     """
+    if not settings.enable_ipset:
+        logger.info("ipset blocking is disabled via settings; skipping")
+        return
+
     ensure_set()
     rules = [f"add {SET_NAME} {ip.strip()}" for ip in ips if ip.strip()]
     if not rules:

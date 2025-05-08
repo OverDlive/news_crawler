@@ -10,9 +10,9 @@ WORKDIR /build
 # Copy only files needed to resolve dependencies — maximises cache‑efficiency
 COPY pyproject.toml .
 
-# Install PDM just for exporting a lightweight requirements.txt (no hashes)
 RUN pip install --upgrade pip && \
-    pip install pdm-backend pdm && \
+    pip install pdm-backend pdm python-dateutil && \
+    pdm lock --prod && \
     pdm export --prod --without-hashes -o requirements.txt
 
 ############################ 2️⃣ Production stage #########################
@@ -28,6 +28,7 @@ USER secbot
 
 # Copy dependency lockfile first to leverage Docker layer cache
 COPY --from=builder /build/requirements.txt .
+COPY --from=builder /build/pdm.lock .
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
 # Copy application code
