@@ -22,7 +22,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import List, Optional
 
-from pydantic import AnyUrl, BaseSettings, Field, validator
+from pydantic_settings import BaseSettings
+from pydantic import Field, validator
 
 # -----------------------------------------------------------------------------
 # Settings Model
@@ -67,12 +68,23 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------ #
     # Mail / SMTP
     # ------------------------------------------------------------------ #
-    smtp_user: str = Field(..., env="SEC_BOT_SMTP_USER", description="Sender address")
+    smtp_user: str = Field(
+        "",
+        env="SEC_BOT_SMTP_USER",
+        description="Sender address (blank = e‑mail disabled)",
+    )
     mail_to: List[str] = Field(
         default_factory=list,
         env="SEC_BOT_MAIL_TO",
         description="Comma‑separated recipient list",
     )
+    # Note: mail_to can be empty (no recipients) without raising validation errors.
+
+    # Convenience flag
+    @property
+    def email_enabled(self) -> bool:  # noqa: D401
+        "Return True if both smtp_user and at least one recipient are set."
+        return bool(self.smtp_user and self.mail_to)
 
     # ------------------------------------------------------------------ #
     # Defence integration toggles

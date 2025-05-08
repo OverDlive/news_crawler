@@ -9,3 +9,4 @@ pyyaml>=6.0
 google-auth-oauthlib>=1.2
 google-api-python-client>=2.126
 colorama>=0.4; platform_system == 'Windows'
+pydantic-settings>=2.1
