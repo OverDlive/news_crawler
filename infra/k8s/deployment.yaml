@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: secbot
+  labels:
+    app: secbot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: secbot
+  template:
+    metadata:
+      labels:
+        app: secbot
+    spec:
+      # Uncomment if you need host networking for ipset / Suricata integration
+      # hostNetwork: true
+      # securityContext:
+      #   runAsUser: 0      # run as root only when absolutely required
+      containers:
+        - name: secbot
+          image: ghcr.io/handonghyeok/secbot:latest
+          imagePullPolicy: Always
+          envFrom:
+            - secretRef:
+                name: secbot-env              # kubectl create secret generic secbot-env --from-env-file=.env
+          env:
+            - name: TZ
+              value: Asia/Seoul
+          ports: []
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+          livenessProbe:
+            exec:
+              command: ["python", "-m", "secbot.main", "--version"]
+            initialDelaySeconds: 30
+            periodSeconds: 60
+          readinessProbe:
+            exec:
+              command: ["python", "-m", "secbot.main", "--version"]
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          logLevel: "INFO"
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: secbot-sa
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: secbot-env
+type: Opaque
+stringData:
+  # Fill values or use kubectl --from-env-file to populate
+  SEC_BOT_SMTP_USER: "your.address@gmail.com"
+  SEC_BOT_SMTP_APP_PASSWORD: "xxxxxxxxxxxxxxxx"
+  SEC_BOT_MAIL_TO: "recipient@example.com"
+  SEC_BOT_CRON_TIME: "06:00"

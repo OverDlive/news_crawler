@@ -1,0 +1,45 @@
+# /etc/systemd/system/secbot.service
+# ----------------------------------
+# Systemd unit file for running SecBot as a long‑lived service.
+#
+# • Assumes that ‘/opt/secbot’ contains the project directory with a
+#   Python virtualenv in `.venv/`.
+# • Loads environment variables from “/opt/secbot/.env”.
+# • Writes logs to the system journal (`journalctl -u secbot`).
+
+[Unit]
+Description=SecBot – Daily Security Crawler & Defence Automator
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# --- Python virtualenv ---
+WorkingDirectory=/opt/secbot
+ExecStart=/opt/secbot/.venv/bin/python -m secbot.main
+
+# --- Environment ---
+EnvironmentFile=/opt/secbot/.env
+Environment=PYTHONUNBUFFERED=1
+Environment=TZ=Asia/Seoul
+
+# --- Restart policy ---
+Restart=on-failure
+RestartSec=15s
+
+# --- Security hardening ---
+User=secbot
+Group=secbot
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/secbot
+CapabilityBoundingSet=CAP_NET_ADMIN  # required only if ipset is used
+
+# --- Resource limits ---
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target

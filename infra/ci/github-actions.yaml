@@ -1,0 +1,75 @@
+
+
+# GitHub Actions ─ Continuous Integration for SecBot
+#
+# • Python 3.12 + PDM install
+# • pre‑commit linting
+# • pytest (offline first)
+# • (main branch only) Build & push Docker image to GHCR
+#
+# Adapt TAG_NAME / REGISTRY as required.
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⬇️ Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 📦 Setup PDM
+        uses: pdm-project/setup-pdm@v4
+        with:
+          python-version: "3.12"
+
+      - name: 📥 Install dependencies
+        run: pdm install -G :all
+
+      - name: 🧹 Lint (pre‑commit)
+        run: pdm run lint
+
+      - name: 🧪 Test (pytest – offline)
+        run: pdm run test
+
+  docker:
+    # Build & push image only for commits to main
+    if: github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⬇️ Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔑 Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🐳 Build & push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/${{ github.repository }}:latest
+          build-args: |
+            PIP_NO_CACHE_DIR=1
+            PYTHONUNBUFFERED=1
