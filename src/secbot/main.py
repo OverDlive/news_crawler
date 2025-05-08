@@ -31,9 +31,12 @@ def job() -> None:
 
         send_digest(n, adv, ioc)
 
-        if settings.enable_ipset:
+        if settings.enable_ipset and ioc["ip"]:
             ipset.block(ioc["ip"])
-        if settings.enable_suricata:
+        else:
+            log.info("ipset disabled or no IPs – skipping block()")
+
+        if settings.enable_suricata and ioc["ip"]:
             suricata.block(ioc["ip"])
 
         log.info("SecBot job finished OK")

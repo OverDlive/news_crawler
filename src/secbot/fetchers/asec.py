@@ -1,5 +1,3 @@
-
-
 """
 secbot.fetchers.asec
 ~~~~~~~~~~~~~~~~~~~~
@@ -34,8 +32,18 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-ASEC_BASE_URL: str = "https://asec.ahnlab.com"
-CSS_POST_LINK: str = "h2.entry-title > a"
+# 한국어 홈으로 직접 접근해야 글 목록이 노출된다
+ASEC_BASE_URL: str = "https://asec.ahnlab.com/ko/"
+
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 SecBot/1.0"
+    ),
+    "Accept-Language": "ko,en;q=0.8",
+}
+# 2025‑03 레이아웃 변경: <article class="post"> ─> <h2><a>
+CSS_POST_LINK: str = "article.post h2 a"
 
 # IOC 정규식
 _PATTERNS = {
@@ -61,11 +69,7 @@ class Post:
 
 
 def _soup_from_url(url: str) -> bs4.BeautifulSoup:
-    headers = {
-        "User-Agent": (
-            "SecBot/1.0 (+https://github.com/handonghyeok/news_crawler)"
-        )
-    }
+    headers = HEADERS
     logger.debug("GET %s", url)
     resp = requests.get(url, headers=headers, timeout=15)
     resp.raise_for_status()
@@ -87,11 +91,20 @@ def get_posts(*, limit: int = 5) -> List[Post]:
     """
     soup = _soup_from_url(ASEC_BASE_URL)
     links = soup.select(CSS_POST_LINK)[:limit]
+    if not links:
+        logger.warning("ASEC selector %s returned 0 links – layout may have changed", CSS_POST_LINK)
+        # Fallback: try alternative HTML selector for post links
+        alt = soup.select("div.newsList dt a, div.news-list a, article a.title")[:limit]
+        if alt:
+            logger.info("Using fallback selector, found %d links", len(alt))
+            links = alt
 
     posts: List[Post] = []
     for a in links:
         title = a.get_text(strip=True)
         href = a["href"]
+        if href.startswith("/"):
+            href = ASEC_BASE_URL.rstrip("/") + href
         posts.append(Post(title=title, link=href))
     logger.info("Fetched %d ASEC post links", len(posts))
     return posts
