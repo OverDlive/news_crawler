@@ -1,0 +1,38 @@
+
+
+version: "3.9"
+
+services:
+  secbot:
+    container_name: secbot
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # If you push an image to a registry, comment out build and use:
+    # image: ghcr.io/<username>/secbot:latest
+    env_file:
+      - .env
+    restart: unless-stopped
+    # Use UTC+9 for logs inside the container
+    environment:
+      - TZ=Asia/Seoul
+    # Uncomment the following lines if you want ipset or Suricata integration
+    #  (requires the container to run in privileged mode and access host net)
+    # network_mode: "host"
+    # privileged: true
+    # volumes:
+    #   - /etc/suricata/rules:/etc/suricata/rules  # share Suricata rules
+    #   - /etc/ipset:/etc/ipset                    # share ipset save file
+
+    healthcheck:
+      test: ["CMD", "python", "-m", "news_crawler.main", "--version"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
