@@ -13,3 +13,109 @@ dependencies = [
 
 [tool.pdm.scripts]
 sec-bot = "python -m secbot.main"
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+######################################################################
+# Project metadata
+######################################################################
+[project]
+name            = "secbot"
+version         = "0.1.0"
+description     = "Daily security news crawler, IOC extractor, and automatic defence updater"
+readme          = "README.md"
+requires-python = ">=3.11"
+license         = {text = "MIT"}
+authors         = [
+  { name = "DongHyeok Han", email = "handonghyeok@example.com" }
+]
+keywords        = [
+  "cybersecurity",
+  "crawler",
+  "threat-intelligence",
+  "ioc",
+  "ipset",
+  "suricata"
+]
+classifiers     = [
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Operating System :: POSIX :: Linux",
+  "Intended Audience :: System Administrators",
+  "Topic :: Security",
+  "Topic :: Internet :: WWW/HTTP :: Dynamic Content :: News/Diary"
+]
+
+######################################################################
+# Runtime dependencies
+######################################################################
+dependencies = [
+  # Core
+  "feedparser>=6.0",
+  "beautifulsoup4>=4.13",
+  "lxml>=5.2",
+  "schedule>=1.2",
+  "requests>=2.32",
+  "pydantic>=2.7",
+  "pyyaml>=6.0",
+
+  # Gmail OAuth2 / App‑Password support
+  "google-auth-oauthlib>=1.2",
+  "google-api-python-client>=2.126",
+
+  # Optional coloured logs (auto‑detected)
+  "colorama>=0.4; platform_system == 'Windows'",
+]
+
+######################################################################
+# Optional (extra) dependencies
+######################################################################
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2",
+  "pytest-mock>=3.12",
+  "pre-commit>=3.7",
+  "black>=24.4",
+  "isort>=5.13",
+  "mypy>=1.10",
+]
+docs = ["mkdocs>=1.6", "mkdocs-material>=9.5"]
+
+######################################################################
+# Entry points / scripts
+######################################################################
+[project.scripts]
+sec-bot = "secbot.main:_run_loop"
+
+######################################################################
+# PDM specific settings
+######################################################################
+[tool.pdm]
+# Automatically export a classic requirements.txt after each lock
+[tool.pdm.build]
+includes = ["src"]
+
+[tool.pdm.scripts]
+lint = "pre-commit run --all-files"
+test = "pytest -m 'not network'"
+run  = "python -m secbot.main"
+
+######################################################################
+# Tool settings (optional helpers)
+######################################################################
+[tool.black]
+line-length = 88
+target-version = ['py311', 'py312']
+
+[tool.isort]
+profile = "black"
+known_third_party = ["feedparser", "bs4", "schedule", "requests"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = []
