@@ -29,8 +29,8 @@ def job() -> None:
 
         n   = news.get(limit=settings.news_limit)
         adv = advisory.get(limit=settings.advisory_limit)
-        # Use get_iocs_from_url for the specific ASEC blog post
-        ioc = get_iocs_from_url("https://asec.ahnlab.com/ko/87814/")
+        # Fetch IOC directly from ASEC 'Daily Threat' listing (always latest)
+        ioc = get_iocs_from_url("https://asec.ahnlab.com/ko/category/threatviews-ko/?latest=")
 
         send_digest(n, adv, ioc)
 
