@@ -1,0 +1,11 @@
+# Runtime dependencies exported from pyproject.toml
+feedparser>=6.0
+beautifulsoup4>=4.13
+lxml>=5.2
+schedule>=1.2
+requests>=2.32
+pydantic>=2.7
+pyyaml>=6.0
+google-auth-oauthlib>=1.2
+google-api-python-client>=2.126
+colorama>=0.4; platform_system == 'Windows'
