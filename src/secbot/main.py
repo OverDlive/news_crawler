@@ -1,4 +1,4 @@
-import schedule, time, sys, signal
+import schedule, time, sys, signal, argparse
 from secbot.utils.logger import setup as log_setup, get_logger
 from secbot.fetchers import news, advisory, asec
 from secbot.mailer.gmail import send_digest
@@ -8,6 +8,17 @@ from secbot.config import settings
 # Configure root logger (KST timestamps, optional file)
 log_setup(level="DEBUG" if settings.debug else "INFO")
 log = get_logger(__name__)
+
+# ------------------------------------------------------------------ #
+# CLI argument parsing
+# ------------------------------------------------------------------ #
+_parser = argparse.ArgumentParser(description="SecBot launcher")
+_parser.add_argument(
+    "--once", "-1",
+    action="store_true",
+    help="Run one full SecBot cycle immediately and exit."
+)
+_ARGS = _parser.parse_args()
 
 def job() -> None:
     """Run one full SecBot cycle (news → advisory → IOC → mail → defense)."""
@@ -42,4 +53,7 @@ def _run_loop() -> None:
         sys.exit(0)
 
 if __name__ == "__main__":
-    _run_loop()
+    if _ARGS.once:
+        job()
+    else:
+        _run_loop()
