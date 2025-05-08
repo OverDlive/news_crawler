@@ -1,0 +1,15 @@
+[project]
+name = "security-crawler-suite"
+dependencies = [
+  "feedparser>=6.0",
+  "beautifulsoup4>=4.13",
+  "lxml",
+  "schedule",
+  "google-auth-oauthlib",
+  "google-api-python-client",
+  "pydantic",
+  "pyyaml",
+]
+
+[tool.pdm.scripts]
+sec-bot = "python -m secbot.main"
