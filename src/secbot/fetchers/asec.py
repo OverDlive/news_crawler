@@ -9,31 +9,29 @@ HTML 구조가 변경될 경우 `CSS_POST_LINK` 선택자 한 줄만 수정하�
 
 공용 API
 --------
-* :pyfunc:`get_posts` – 최근 글 메타데이터 반환 (`Post` dataclass).
-* :pyfunc:`get_iocs`  – 최근 *n*개 글에서 IOC 딕셔너리 반환.
+* :pyfunc:`get_iocs_from_url` – 특정 글 URL에서 IOC 딕셔너리 반환.
 
 Example
 -------
 >>> from secbot.fetchers import asec
->>> iocs = asec.get_iocs(limit=3)
+>>> iocs = asec.get_iocs_from_url("https://asec.ahnlab.com/ko/87814/")
 >>> print(iocs["ip"][:5])
 """
 
 from __future__ import annotations
 
-import datetime as _dt
 import logging
 import re
-from dataclasses import dataclass
-from typing import Dict, Iterable, List, Set
+from typing import Dict, List, Set, Iterable
 
 import bs4
 import requests
 
 logger = logging.getLogger(__name__)
 
-# 한국어 홈으로 직접 접근해야 글 목록이 노출된다
-ASEC_BASE_URL: str = "https://asec.ahnlab.com/ko/"
+# CSS selector to find daily threat posts on ASEC listing page
+CSS_POST_LINK: str = "div.list_cont a.tit"  # adjust selector based on current ASEC list structure
+ASEC_LIST_URL: str = "https://asec.ahnlab.com/ko/"
 
 HEADERS = {
     "User-Agent": (
@@ -42,30 +40,17 @@ HEADERS = {
     ),
     "Accept-Language": "ko,en;q=0.8",
 }
-# 2025‑03 레이아웃 변경: <article class="post"> ─> <h2><a>
-CSS_POST_LINK: str = "article.post h2 a"
 
-# IOC 정규식
 _PATTERNS = {
     "ip": re.compile(
-        r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d{1,2})\.){3}(?:25[0-5]|2[0-4]\d|1?\d{1,2})\b"
+        r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d{1,2})(?:\.|\[\.\])){3}(?:25[0-5]|2[0-4]\d|1?\d{1,2})\b"
     ),
-    # SHA‑256 (64 hex) & SHA‑1/MD5 (optional) – 필요시 추가
-    "hash": re.compile(r"\b[a-fA-F0-9]{64}\b"),
+    "hash": re.compile(r"\b(?:[A-Fa-f0-9]{32}|[A-Fa-f0-9]{40}|[A-Fa-f0-9]{64})\b"),
     "url": re.compile(
-        r"https?://[A-Za-z0-9\-_\.]+(?:/[^\s\"'<>]*)?",
+        r"(?:https?://[A-Za-z0-9\-_\.]+(?:/[^\s\"'<>]*)?|https?\[:\]//[^\s\"'<>]+)",
         flags=re.IGNORECASE,
     ),
 }
-
-
-@dataclass(slots=True)
-class Post:
-    """ASEC 블로그 글 메타데이터"""
-
-    title: str
-    link: str
-    published: _dt.date | None = None
 
 
 def _soup_from_url(url: str) -> bs4.BeautifulSoup:
@@ -76,38 +61,19 @@ def _soup_from_url(url: str) -> bs4.BeautifulSoup:
     return bs4.BeautifulSoup(resp.text, "lxml")
 
 
-def get_posts(*, limit: int = 5) -> List[Post]:
+def get_posts(limit: int = 1) -> list[str]:
     """
-    최근 *limit*개의 ASEC 글을 반환.
-
-    Parameters
-    ----------
-    limit:
-        추출할 글 개수(기본 5).
-
-    Returns
-    -------
-    list[Post]
+    Fetch the URLs of the latest `limit` ASEC blog posts from the listing page.
     """
-    soup = _soup_from_url(ASEC_BASE_URL)
+    soup = _soup_from_url(ASEC_LIST_URL)
     links = soup.select(CSS_POST_LINK)[:limit]
-    if not links:
-        logger.warning("ASEC selector %s returned 0 links – layout may have changed", CSS_POST_LINK)
-        # Fallback: try alternative HTML selector for post links
-        alt = soup.select("div.newsList dt a, div.news-list a, article a.title")[:limit]
-        if alt:
-            logger.info("Using fallback selector, found %d links", len(alt))
-            links = alt
-
-    posts: List[Post] = []
+    urls = []
     for a in links:
-        title = a.get_text(strip=True)
-        href = a["href"]
-        if href.startswith("/"):
-            href = ASEC_BASE_URL.rstrip("/") + href
-        posts.append(Post(title=title, link=href))
-    logger.info("Fetched %d ASEC post links", len(posts))
-    return posts
+        href = a.get("href")
+        if href and href.startswith("/"):
+            href = ASEC_LIST_URL.rstrip("/") + href
+        urls.append(href)
+    return urls
 
 
 def _extract_iocs_from_html(html: str) -> Dict[str, Set[str]]:
@@ -117,38 +83,56 @@ def _extract_iocs_from_html(html: str) -> Dict[str, Set[str]]:
     return iocs
 
 
-def _merge_iocs(dst: Dict[str, Set[str]], src: Dict[str, Iterable[str]]) -> None:
-    for k in dst:
-        dst[k].update(src.get(k, []))
-
-
-def get_iocs(*, limit: int = 5) -> Dict[str, List[str]]:
+def get_iocs_from_url(url: str) -> Dict[str, List[str]]:
     """
-    최근 *limit*개 ASEC 글에서 IOC를 수집 후 dedup‧정렬해 반환.
-
-    Returns
-    -------
-    dict[str, list[str]]
-        {"ip": [...], "hash": [...], "url": [...]}
+    Fetch IOC data (IP, hash, URL) from a specific ASEC blog post URL.
     """
-    posts = get_posts(limit=limit)
-    merged: Dict[str, Set[str]] = {k: set() for k in _PATTERNS}
+    try:
+        soup = _soup_from_url(url)
+    except requests.RequestException as exc:
+        logger.error("Failed to fetch ASEC URL %s: %s", url, exc)
+        return {k: [] for k in _PATTERNS}
+    text = soup.get_text(" ", strip=True)
+    # Extract raw text-based IOCs
+    src_iocs = _extract_iocs_from_html(text)
+    # Also extract URLs from anchor hrefs
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        if _PATTERNS["url"].search(href):
+            src_iocs["url"].add(href)
+    # Exclude navigation and homepage links not needed as IOC
+    exclude_urls = {
+        "https://asec.ahnlab.com/",
+        "https://asec.ahnlab.com/ko/87737/",
+        "https://asec.ahnlab.com/ko/87750/",
+        "https://asec.ahnlab.com/ko/87752/",
+        "https://asec.ahnlab.com/ko/87754/",
+        "https://asec.ahnlab.com/ko/87756/",
+        "https://asec.ahnlab.com/ko/87792/",
+        "https://asec.ahnlab.com/ko/87814/",
+    }
+    # Exclude navigation, homepage, and any AhnLab domain URLs
+    src_iocs["url"] = {
+        u for u in src_iocs["url"]
+        if u not in exclude_urls and "ahnlab.com" not in u
+    }
+    # Convert sets to sorted lists
+    return {k: sorted(v) for k, v in src_iocs.items()}
 
-    for p in posts:
+
+def get_latest_iocs(post_limit: int = 1) -> Dict[str, List[str]]:
+    """
+    Fetch IOC data from the latest `post_limit` ASEC posts.
+    Aggregates and deduplicates IP, hash, and URL.
+    """
+    merged: Dict[str, set] = {k: set() for k in _PATTERNS}
+    posts = get_posts(limit=post_limit)
+    for url in posts:
         try:
-            soup = _soup_from_url(p.link)
-        except requests.RequestException as exc:
-            logger.warning("Skip %s due to error: %s", p.link, exc)
+            iocs = get_iocs_from_url(url)
+        except Exception:
             continue
-        iocs = _extract_iocs_from_html(soup.get_text(" ", strip=True))
-        _merge_iocs(merged, iocs)
-
-    # set → sorted list 로 변환
-    cleaned = {k: sorted(v) for k, v in merged.items()}
-    logger.info(
-        "Collected IOC counts — IP:%d  HASH:%d  URL:%d",
-        len(cleaned["ip"]),
-        len(cleaned["hash"]),
-        len(cleaned["url"]),
-    )
-    return cleaned
+        for kind, items in iocs.items():
+            merged[kind].update(items)
+    # Convert to sorted lists
+    return {k: sorted(v) for k, v in merged.items()}

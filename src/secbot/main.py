@@ -1,6 +1,8 @@
 import schedule, time, sys, signal, argparse
 from secbot.utils.logger import setup as log_setup, get_logger
 from secbot.fetchers import news, advisory, asec
+# Import the new IOC-extraction function
+from secbot.fetchers.asec import get_iocs_from_url
 from secbot.mailer.gmail import send_digest
 from secbot.defense import ipset, suricata
 from secbot.config import settings
@@ -27,7 +29,8 @@ def job() -> None:
 
         n   = news.get(limit=settings.news_limit)
         adv = advisory.get(limit=settings.advisory_limit)
-        ioc = asec.get_iocs(limit=settings.asec_post_limit)
+        # Use get_iocs_from_url for the specific ASEC blog post
+        ioc = get_iocs_from_url("https://asec.ahnlab.com/ko/87814/")
 
         send_digest(n, adv, ioc)
 
