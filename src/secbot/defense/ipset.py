@@ -106,7 +106,12 @@ def block(ips: Iterable[str]) -> None:
         logger.info("ipset blocking is disabled via settings; skipping")
         return
 
-    ensure_set()
+    try:
+        ensure_set()
+    except RuntimeError as exc:
+        # ipset binary missing or not usable – log and skip blocking
+        logger.warning("ipset unavailable; skipping block(): %s", exc)
+        return
     rules = [f"add {SET_NAME} {ip.strip()}" for ip in ips if ip.strip()]
     if not rules:
         logger.debug("No IPs received for blocking")
@@ -121,6 +126,10 @@ def flush() -> None:
     """
     Remove **all** entries from the managed set.
     """
-    ensure_set()
+    try:
+        ensure_set()
+    except RuntimeError as exc:
+        logger.warning("ipset unavailable; skipping flush(): %s", exc)
+        return
     logger.info("Flushing all IPs from ipset set %s", SET_NAME)
     _run_ipset_cmd(["flush", SET_NAME])

@@ -122,6 +122,16 @@ class Settings(BaseSettings):
             return [e.strip() for e in v.split(",") if e.strip()]
         return v
 
+    @validator("enable_ipset", "enable_suricata", pre=True)
+    def _parse_bool(cls, v):
+        """
+        Convert common truthy / falsy strings to real booleans so that
+        Docker `-e SEC_BOT_ENABLE_IPSET=false` is parsed as False.
+        """
+        if isinstance(v, str):
+            return v.strip().lower() in {"1", "true", "yes", "y", "on"}
+        return bool(v)
+
 
 # -----------------------------------------------------------------------------
 # Singleton / Cached accessor
