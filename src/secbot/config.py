@@ -128,6 +128,21 @@ class Settings(BaseSettings):
             return [t.strip() for t in v.split(",") if t.strip()]
         return v
 
+    # ------------------------------------------------------------------ #
+    # IOC Scheduler
+    # ------------------------------------------------------------------ #
+    ioc_time: str = Field(
+        "10:00",
+        env="SEC_BOT_IOC_TIME",
+        description="HH:MM time (24-hour local timezone) for daily IOC email.",
+    )
+
+    @validator("ioc_time", pre=True)
+    def _parse_ioc_time(cls, v):
+        if isinstance(v, str):
+            return v.strip()
+        return v
+
     @validator("enable_ipset", "enable_suricata", pre=True)
     def _parse_bool(cls, v):
         """
