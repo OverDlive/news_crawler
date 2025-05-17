@@ -46,6 +46,7 @@ dependencies = [
   "schedule>=1.2",
   "requests>=2.32",
   "cloudscraper>=1.2.71",
+  "apscheduler>=3.10",
   "pydantic>=2.7",
   "pyyaml>=6.0",
   "python-dateutil>=2.8",

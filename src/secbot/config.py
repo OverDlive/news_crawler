@@ -34,10 +34,10 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------ #
     # Cron / Scheduler
     # ------------------------------------------------------------------ #
-    cron_time: str = Field(
-        "06:00",
+    cron_time: List[str] = Field(
+        default_factory=lambda: ["06:00"],
         env="SEC_BOT_CRON_TIME",
-        description="HH:MM in 24‑hour format (local timezone) for daily job.",
+        description="Comma-separated list of HH:MM times (24‑hour local timezone) for daily jobs.",
     )
 
     # ------------------------------------------------------------------ #
@@ -120,6 +120,12 @@ class Settings(BaseSettings):
     def _split_emails(cls, v):
         if isinstance(v, str):
             return [e.strip() for e in v.split(",") if e.strip()]
+        return v
+
+    @validator("cron_time", pre=True)
+    def _split_cron_time(cls, v):
+        if isinstance(v, str):
+            return [t.strip() for t in v.split(",") if t.strip()]
         return v
 
     @validator("enable_ipset", "enable_suricata", pre=True)

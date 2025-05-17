@@ -1,4 +1,5 @@
-import schedule, time, sys, signal, argparse
+import time, sys, signal, argparse
+from secbot.scheduler import start_scheduler
 from secbot.utils.logger import setup as log_setup, get_logger
 from secbot.fetchers import news, advisory, asec
 # Import the new IOC-extraction function
@@ -46,20 +47,17 @@ def job() -> None:
     except Exception:
         log.exception("SecBot job failed")
 
-schedule.every().day.at(settings.cron_time).do(job)
-log.info("Scheduled daily job at %s", settings.cron_time)
-
-def _run_loop() -> None:
-    try:
-        while True:
-            schedule.run_pending()
-            time.sleep(1)
-    except KeyboardInterrupt:
-        log.info("SecBot interrupted by user — exiting.")
-        sys.exit(0)
 
 if __name__ == "__main__":
     if _ARGS.once:
         job()
     else:
-        _run_loop()
+        scheduler = start_scheduler()
+        log.info("SecBot scheduler started")
+        try:
+            while True:
+                time.sleep(1)
+        except (KeyboardInterrupt, SystemExit):
+            log.info("SecBot scheduler stopping – exiting.")
+            scheduler.shutdown()
+            sys.exit(0)

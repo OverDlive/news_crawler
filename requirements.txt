@@ -13,3 +13,4 @@ pydantic-settings>=2.1
 python-dateutil>=2.8
 pydantic-settings>=2.0
 loudscraper>=1.2.71
+apscheduler>=3.10
