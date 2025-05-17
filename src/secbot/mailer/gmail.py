@@ -177,10 +177,90 @@ def send_digest(
     subject:
         Optional custom subject line.
     """
+    """
+    Build a daily digest e‑mail by sending each section separately.
+    """
+    # determine today's date
+    date_str = _dt.date.today().strftime("%Y-%m-%d")
+
+    # send each section as its own email
+    send_security_news(news, subject=subject or f"[SecBot] Security News {date_str}")
+    send_advisories(advisories, subject=subject or f"[SecBot] Vulnerability Advisories {date_str}")
+    send_iocs(iocs, subject=subject or f"[SecBot] Malicious IOC {date_str}")
+
+def send_security_news(news: Iterable, *, subject: str | None = None) -> None:
+    """
+    Send only the Security News section as an email.
+    """
+    today = _dt.date.today()
     msg = EmailMessage()
     msg["From"] = SMTP_USER
     msg["To"] = ", ".join(MAIL_TO)
-    msg["Subject"] = subject or f"[SecBot] Daily Digest {_dt.date.today():%Y-%m-%d}"
-    msg.set_content(_build_body(news, advisories, iocs))
+    msg["Subject"] = subject or f"[SecBot] Security News {today:%Y-%m-%d}"
+    # Build news-only body
+    lines: List[str] = [
+        f"🛡️  Security News – {today:%Y-%m-%d}",
+        "=" * 50,
+        "\n[ Security News ]"
+    ]
+    lines.extend(
+        item.to_md() if hasattr(item, "to_md") else f"- {item}"
+        for item in news
+    )
+    lines.append("\n— Sent automatically by SecBot\n")
+    msg.set_content("\n".join(lines))
+    send(msg)
 
+def send_advisories(advisories: Iterable, *, subject: str | None = None) -> None:
+    """
+    Send only the Vulnerability / Advisory section as an email.
+    """
+    today = _dt.date.today()
+    msg = EmailMessage()
+    msg["From"] = SMTP_USER
+    msg["To"] = ", ".join(MAIL_TO)
+    msg["Subject"] = subject or f"[SecBot] Vulnerability Advisories {today:%Y-%m-%d}"
+    # Build advisory-only body
+    lines: List[str] = [
+        f"🛡️  Vulnerability / Advisory – {today:%Y-%m-%d}",
+        "=" * 50,
+        "\n[ Vulnerability / Advisory ]"
+    ]
+    lines.extend(
+        adv.to_md() if hasattr(adv, "to_md") else f"- {adv}"
+        for adv in advisories
+    )
+    lines.append("\n— Sent automatically by SecBot\n")
+    msg.set_content("\n".join(lines))
+    send(msg)
+
+def send_iocs(iocs: dict, *, subject: str | None = None) -> None:
+    """
+    Send only the Malicious IOC section as an email.
+    """
+    today = _dt.date.today()
+    msg = EmailMessage()
+    msg["From"] = SMTP_USER
+    msg["To"] = ", ".join(MAIL_TO)
+    msg["Subject"] = subject or f"[SecBot] Malicious IOC {today:%Y-%m-%d}"
+    # Build IOC-only body
+    lines: List[str] = [
+        f"🛡️  Malicious IOC – {today:%Y-%m-%d}",
+        "=" * 50,
+        "\n[ Malicious IOC ]"
+    ]
+    ips = sorted(iocs.get("ip", []))
+    hashes = sorted(iocs.get("hash", []))
+    urls = sorted(iocs.get("url", []))
+    lines.append(f"- IP ({len(ips)}):")
+    for ip in ips:
+        lines.append(f"    - {ip}")
+    lines.append(f"- HASH ({len(hashes)}):")
+    for h in hashes:
+        lines.append(f"    - {h}")
+    lines.append(f"- URL ({len(urls)}):")
+    for u in urls:
+        lines.append(f"    - {u}")
+    lines.append("\n— Sent automatically by SecBot\n")
+    msg.set_content("\n".join(lines))
     send(msg)
