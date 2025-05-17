@@ -1,4 +1,6 @@
 import datetime as _dt
+import hashlib
+import os
 from apscheduler.schedulers.background import BackgroundScheduler
 from secbot.config import settings
 from secbot.mailer.gmail import (
@@ -16,26 +18,52 @@ def job_ioc():
     send_iocs(iocs, subject=f"[SecBot] Malicious IOC {_dt.date.today():%Y-%m-%d}")
 
 def job_news_and_advisories():
-    """보안뉴스 + KISA 취약점 중복 제거 후 메일 발송."""
-    news = fetch_news(limit=settings.news_limit)
-    advisories = fetch_advisories(limit=settings.advisory_limit)
+    """Fetch news and advisories once per time slot, deduplicate by daily hash record, then send."""
+    # Prepare a daily file name for deduplication
+    today = _dt.date.today().strftime("%Y%m%d")
+    sent_file = f"last_sent_{today}.txt"
 
-    # --- 중복 제거(예시) ---
-    # File or DB 등에 “오늘 이미 보낸 ID”를 기록해 두었다가
-    # fetch 결과에서 제외시키면 됩니다.
-    # 아래는 very-simple 예시: 파일에 저장된 타이틀을 읽어서 필터링
-    sent_titles = set(open("last_sent_titles.txt", "a+").read().splitlines())
-    filtered_news = [n for n in news         if n.title not in sent_titles]
-    filtered_kisa = [a for a in advisories  if a.id    not in sent_titles]
+    # Load or initialize sent hashes set
+    try:
+        with open(sent_file, "r") as f:
+            sent_hashes = set(f.read().splitlines())
+    except FileNotFoundError:
+        sent_hashes = set()
 
-    # 메일 발송
+    def compute_hash(val: str) -> str:
+        return hashlib.sha256(val.encode("utf-8")).hexdigest()
+
+    # Fetch current items
+    news_items = fetch_news(limit=settings.news_limit)
+    advisories_items = fetch_advisories(limit=settings.advisory_limit)
+
+    # Filter and collect news to send
+    filtered_news = []
+    for item in news_items:
+        key = item.title + "|" + item.link
+        h = compute_hash(key)
+        if h not in sent_hashes:
+            filtered_news.append(item)
+            sent_hashes.add(h)
+
+    # Filter and collect advisories to send
+    filtered_advisories = []
+    for item in advisories_items:
+        key = item.id + "|" + item.link
+        h = compute_hash(key)
+        if h not in sent_hashes:
+            filtered_advisories.append(item)
+            sent_hashes.add(h)
+
+    # Send emails
     send_security_news(filtered_news, subject=f"[SecBot] Security News {_dt.date.today():%Y-%m-%d}")
-    send_advisories(filtered_kisa, subject=f"[SecBot] Vulnerability Advisories {_dt.date.today():%Y-%m-%d}")
+    send_advisories(filtered_advisories, subject=f"[SecBot] Vulnerability Advisories {_dt.date.today():%Y-%m-%d}")
 
-    # 발송한 타이틀을 기록
-    with open("last_sent_titles.txt", "a") as f:
-        for item in filtered_news + filtered_kisa:
-            f.write(item.title + "\n")
+    # Persist updated hashes back to daily file
+    with open(sent_file, "w") as f:
+        for h in sent_hashes:
+            f.write(f"{h}\n")
+
 def start_scheduler():
     """스케줄러 시작: IOC는 cron_time 리스트의 첫 번째 시간에, 뉴스/취약점은 cron_time 리스트의 모든 시간에 실행."""
     sched = BackgroundScheduler(timezone="Asia/Seoul")
