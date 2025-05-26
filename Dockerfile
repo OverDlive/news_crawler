@@ -40,7 +40,7 @@ RUN apt-get update && \
 
 # Optional: create non‑root user (comment out if you need root for ipset)
 RUN adduser --disabled-password --gecos '' secbot
-WORKDIR /app
+WORKDIR /app/src
 USER secbot
 
 # Copy dependency lockfile first to leverage Docker layer cache
@@ -49,7 +49,7 @@ COPY --from=builder /build/pdm.lock .
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
 # Copy application code
-COPY src/ src/
+COPY src/  .
 
 # Default command
 CMD ["python", "-m", "secbot.main"]
