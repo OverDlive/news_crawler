@@ -93,7 +93,17 @@ class Settings(BaseSettings):
         True, env="SEC_BOT_ENABLE_IPSET", description="Enable ipset blocking"
     )
     enable_suricata: bool = Field(
-        False, env="SEC_BOT_ENABLE_SURICATA", description="Enable Suricata reload"
+        True, env="SEC_BOT_ENABLE_SURICATA", description="Enable Suricata reload"
+    )
+    enable_suricata_url: bool = Field(
+        True,
+        env="SEC_BOT_ENABLE_SURICATA_URL",
+        description="Enable Suricata URL blocking"
+    )
+    enable_suricata_hash: bool = Field(
+        True,
+        env="SEC_BOT_ENABLE_SURICATA_HASH",
+        description="Enable Suricata hash blocking"
     )
 
     # ------------------------------------------------------------------ #
@@ -143,7 +153,7 @@ class Settings(BaseSettings):
             return v.strip()
         return v
 
-    @validator("enable_ipset", "enable_suricata", pre=True)
+    @validator("enable_ipset", "enable_suricata", "enable_suricata_url", "enable_suricata_hash", pre=True)
     def _parse_bool(cls, v):
         """
         Convert common truthy / falsy strings to real booleans so that

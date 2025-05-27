@@ -54,6 +54,37 @@ docker compose logs -f secbot     # 실시간 로그 확인
 
 `.env`에 지정한 환경 변수가 컨테이너에 자동 전달됩니다.
 
+### 플랫폼별 Docker 명령어
+
+macOS, Windows, Linux 환경에서 Docker 이미지를 직접 빌드하고 실행할 수 있습니다.
+
+**macOS / Linux (bash/zsh)에서:**
+```bash
+# 이미지 빌드
+docker build -t secbot-prod -f Dockerfile .
+# .env 환경 변수로 컨테이너 한 번 실행
+docker run --rm --env-file .env secbot-prod python -m secbot.main --once
+# 백그라운드 모드로 실행
+docker run -d --env-file .env --name secbot secbot-prod
+```
+**Windows PowerShell에서:**
+```powershell
+# 이미지 빌드
+docker build -t secbot-prod -f Dockerfile .
+# .env 환경 변수로 컨테이너 한 번 실행
+docker run --rm --env-file .env secbot-prod python -m secbot.main --once
+# 분리 모드로 실행
+docker run -d --env-file .env --name secbot secbot-prod
+```
+**Windows CMD에서:**
+```bat
+:: 이미지 빌드
+docker build -t secbot-prod -f Dockerfile .
+:: .env 환경 변수로 컨테이너 한 번 실행
+docker run --rm --env-file .env secbot-prod python -m secbot.main --once
+:: 분리 모드로 실행
+docker run -d --env-file .env --name secbot secbot-prod
+```
 ---
 
 ## 설정(Environment Variables)
