@@ -33,6 +33,10 @@ import ssl
 from email.message import EmailMessage
 from typing import Iterable, List
 
+import io
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+
 logger = logging.getLogger(__name__)
 
 # -----------------------------------------------------------------------------
@@ -132,6 +136,53 @@ def _get_auth_credentials() -> tuple[str, str | None]:
     raise RuntimeError(
         "Neither SEC_BOT_SMTP_APP_PASSWORD nor SEC_BOT_SMTP_XOAUTH2 provided"
     )
+
+
+# -----------------------------------------------------------------------------
+# PDF Report Helper
+# -----------------------------------------------------------------------------
+
+def generate_pdf_report(news, advisories, iocs) -> bytes:
+    """
+    Build a PDF report from security news, advisories, and IOCs.
+    Returns the raw PDF bytes.
+    """
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer)
+    styles = getSampleStyleSheet()
+    story = []
+
+    # Title
+    title = f"Daily Security Report – {_dt.date.today():%Y-%m-%d}"
+    story.append(Paragraph(title, styles["Title"]))
+    story.append(Spacer(1, 12))
+
+    # News section
+    story.append(Paragraph("Security News", styles["Heading2"]))
+    for item in news:
+        text = item.to_md() if hasattr(item, "to_md") else str(item)
+        story.append(Paragraph(text, styles["BodyText"]))
+    story.append(Spacer(1, 12))
+
+    # Advisory section
+    story.append(Paragraph("Vulnerability / Advisory", styles["Heading2"]))
+    for adv in advisories:
+        text = adv.to_md() if hasattr(adv, "to_md") else str(adv)
+        story.append(Paragraph(text, styles["BodyText"]))
+    story.append(Spacer(1, 12))
+
+    # IOC section
+    story.append(Paragraph("Malicious IOC", styles["Heading2"]))
+    for category in ("ip", "hash", "url"):
+        items = sorted(iocs.get(category, []))
+        story.append(Paragraph(f"{category.upper()} ({len(items)})", styles["Heading3"]))
+        for entry in items:
+            story.append(Paragraph(str(entry), styles["BodyText"]))
+        story.append(Spacer(1, 6))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.read()
 
 
 # -----------------------------------------------------------------------------
@@ -263,4 +314,27 @@ def send_iocs(iocs: dict, *, subject: str | None = None) -> None:
         lines.append(f"    - {u}")
     lines.append("\n— Sent automatically by SecBot\n")
     msg.set_content("\n".join(lines))
+    send(msg)
+
+
+# -----------------------------------------------------------------------------
+# PDF Report sender
+# -----------------------------------------------------------------------------
+
+def send_report(news, advisories, iocs, *, subject: str | None = None) -> None:
+    """
+    Send a combined PDF report as an attachment via Gmail SMTP.
+    """
+    today = _dt.date.today()
+    date_str = today.strftime("%Y-%m-%d")
+    msg = EmailMessage()
+    msg["From"] = SMTP_USER
+    msg["To"] = ", ".join(MAIL_TO)
+    msg["Subject"] = subject or f"[SecBot] Daily Security Report {date_str}"
+    # Plain-text fallback
+    msg.set_content(f"Please find attached the Daily Security Report for {date_str}.")
+    # Attach PDF
+    pdf_bytes = generate_pdf_report(news, advisories, iocs)
+    filename = f"security_report_{date_str}.pdf"
+    msg.add_attachment(pdf_bytes, maintype="application", subtype="pdf", filename=filename)
     send(msg)
