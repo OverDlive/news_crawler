@@ -40,27 +40,33 @@ def _reload_suricata():
 
 def block_urls(urls: Iterable[str]) -> None:
     """
-    Append URL-block rules to the rule file,
+    Rewrite URL-block rule file with unique URLs,
     then reload Suricata.
     """
+    # Prepare unique, sorted URL list
+    uniq_urls = sorted({u.strip() for u in urls if u.strip()})
+
     # Ensure rules directory exists
     URL_RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
-    # Deduplicate and sort URLs
-    uniq_urls = sorted({u.strip() for u in urls if u.strip()})
-    with URL_RULES_PATH.open("a") as f:
-        f.write("\n")
+
+    # Overwrite the rule file with fresh rules
+    with URL_RULES_PATH.open("w") as f:
         for idx, url in enumerate(uniq_urls, start=1):
             sid = BASE_SID_URL + idx
             parsed = urlparse(url.replace("[:]", ":").replace("[.]", "."))
             host = parsed.hostname or ""
             path = unquote(parsed.path or "/")
-            uri = path + ("?" + parsed.query if parsed.query else "")
-            f.write(
-                f'drop http any any -> any any (msg:"SecBot malicious URL {url}"; '
-                f'http.host; content:"{host}"; nocase; '
-                f'http.uri; content:"{uri}"; nocase; '
-                f'sid:{sid}; rev:1;)\n'
+            uri = path + (f"?{parsed.query}" if parsed.query else "")
+            rule = (
+                f'drop http any any -> any any '
+                f'(msg:"SecBot malicious URL {url}"; '
+                f'http.host; content:"{host}"; '
+                f'http.uri; content:"{uri}"; '
+                f'sid:{sid}; rev:1;)'
             )
+            f.write(rule + "\n")
+
     logger.info("Wrote %d URL-block rules to %s", len(uniq_urls), URL_RULES_PATH)
-    # Reload Suricata to apply new URL-block rules
+
+    # Reload Suricata to apply new rules
     _reload_suricata()

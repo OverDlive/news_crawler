@@ -113,23 +113,21 @@ def _reload_suricata() -> None:
 
 def _write_rules_file(ips: Iterable[str]) -> int:
     """
-    Overwrite RULES_PATH with drop‑ip rules generated from *ips*.
+    *ips*에서 생성된 IP 차단 규칙으로 RULES_PATH를 덮어씁니다.
 
-    Returns
+    반환값
     -------
     int
-        The number of rules written.
+        작성된 규칙의 개수를 반환합니다.
     """
     RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
-
     uniq_ips = sorted({ip.strip() for ip in ips if ip.strip()})
-    with RULES_PATH.open("a") as fh:
-        fh.write("\n")
+    with RULES_PATH.open("w") as fh:
         for idx, ip in enumerate(uniq_ips, start=1):
             sid = BASE_SID + idx
             fh.write(
-                f'drop ip any any -> {ip} any (msg:"SecBot malicious IP {ip}"; '
-                f'sid:{sid}; rev:1;)\n'
+                f'drop ip any any -> {ip} any '
+                f'(msg:"SecBot malicious IP {ip}"; sid:{sid}; rev:1;)\n'
             )
     logger.info("Wrote %d Suricata IP‑block rules to %s", len(uniq_ips), RULES_PATH)
     return len(uniq_ips)
