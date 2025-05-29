@@ -85,15 +85,30 @@ def _signal_suricata() -> None:
 
 
 def _reload_suricata() -> None:
-    """Try Suricata native reload, fallback to signal if unsupported."""
+    """
+    Reload Suricata rules by first testing the configuration,
+    then using suricatasc if available, otherwise falling back to USR2 signal.
+    """
     try:
-        _run_suricata_cmd(["--reload-rules"])
-        logger.info("Suricata ruleset reloaded successfully")
-    except subprocess.CalledProcessError as exc:
-        logger.warning(
-            "suricata --reload-rules failed (%s). Falling back to USR2 signal", exc
-        )
-        _signal_suricata()
+        # Test the Suricata configuration
+        config_path = os.getenv("SURICATA_CONFIG_PATH", "/etc/suricata/suricata.yaml")
+        _run_suricata_cmd(["-T", "-c", config_path])
+        logger.info("Suricata configuration test passed")
+        # Attempt to reload rules via suricatasc CLI
+        sc_tool = shutil.which("suricatasc")
+        if sc_tool:
+            subprocess.run([sc_tool, "reload-rules"], check=True)
+            logger.info("Suricata rules reloaded via suricatasc")
+        else:
+            # Fallback to sending USR2 to the running Suricata process
+            if PID_FILE and PID_FILE.exists():
+                pid = PID_FILE.read_text().strip()
+                subprocess.run(["kill", "-USR2", pid], check=True)
+                logger.info("Sent USR2 signal to Suricata PID %s", pid)
+            else:
+                logger.error("Cannot reload Suricata rules: PID file %s not found", PID_FILE)
+    except subprocess.CalledProcessError as e:
+        logger.error("Error during Suricata reload: %s", e)
 
 
 def _write_rules_file(ips: Iterable[str]) -> int:

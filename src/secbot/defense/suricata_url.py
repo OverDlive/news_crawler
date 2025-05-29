@@ -13,21 +13,43 @@ PID_FILE = Path(os.getenv("SURICATA_PID_FILE", "/var/run/suricata.pid"))
 BASE_SID_URL = 7100000
 
 def _reload_suricata():
+    """
+    Reload Suricata rules by first testing the configuration,
+    then using suricatasc if available, otherwise falling back to USR2 signal.
+    """
     try:
-        subprocess.run([SURICATA_BIN, "--reload-rules"], check=True)
-        logger.info("Suricata reloaded rules successfully")
-    except Exception:
-        if PID_FILE.exists():
-            pid = PID_FILE.read_text().strip()
-            subprocess.run(["kill", "-USR2", pid])
-            logger.info("Sent USR2 to Suricata PID %s", pid)
+        # Test the Suricata configuration
+        config_path = os.getenv("SURICATA_CONFIG_PATH", "/etc/suricata/suricata.yaml")
+        subprocess.run([SURICATA_BIN, "-T", "-c", config_path], check=True)
+        logger.info("Suricata configuration test passed")
+        # Attempt to reload rules via suricatasc CLI
+        sc_tool = shutil.which("suricatasc")
+        if sc_tool:
+            subprocess.run([sc_tool, "reload-rules"], check=True)
+            logger.info("Suricata rules reloaded via suricatasc")
+        else:
+            # Fallback to sending USR2 to the running Suricata process
+            if PID_FILE.exists():
+                pid = PID_FILE.read_text().strip()
+                subprocess.run(["kill", "-USR2", pid], check=True)
+                logger.info("Sent USR2 signal to Suricata PID %s", pid)
+            else:
+                logger.error("Cannot reload Suricata rules: PID file %s not found", PID_FILE)
+    except subprocess.CalledProcessError as e:
+        logger.error("Error during Suricata reload: %s", e)
 
 def block_urls(urls: Iterable[str]) -> None:
+    """
+    Append URL-block rules to the rule file,
+    then reload Suricata.
+    """
+    # Ensure rules directory exists
     URL_RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
-    uniq = sorted({u.strip() for u in urls if u.strip()})
+    # Deduplicate and sort URLs
+    uniq_urls = sorted({u.strip() for u in urls if u.strip()})
     with URL_RULES_PATH.open("a") as f:
         f.write("\n")
-        for idx, url in enumerate(uniq, start=1):
+        for idx, url in enumerate(uniq_urls, start=1):
             sid = BASE_SID_URL + idx
             parsed = urlparse(url.replace("[:]", ":").replace("[.]", "."))
             host = parsed.hostname or ""
@@ -39,5 +61,6 @@ def block_urls(urls: Iterable[str]) -> None:
                 f'http.uri; content:"{uri}"; nocase; '
                 f'sid:{sid}; rev:1;)\n'
             )
-    logger.info("Wrote %d URL-block rules to %s", len(uniq), URL_RULES_PATH)
+    logger.info("Wrote %d URL-block rules to %s", len(uniq_urls), URL_RULES_PATH)
+    # Reload Suricata to apply new URL-block rules
     _reload_suricata()
