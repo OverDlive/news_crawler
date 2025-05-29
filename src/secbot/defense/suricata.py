@@ -47,7 +47,7 @@ SURICATA_BIN: str = (
     os.getenv("SURICATA_BIN") or shutil.which("suricata") or "/usr/bin/suricata"
 )
 RULES_PATH: Path = Path(
-    os.getenv("SURICATA_RULES_PATH", "/etc/suricata/rules/secbot-blacklist.rules")
+    os.getenv("SURICATA_RULES_PATH", "/etc/suricata/rules/secbot.rules")
 )
 PID_FILE: Path | None = (
     Path(os.getenv("SURICATA_PID_FILE"))

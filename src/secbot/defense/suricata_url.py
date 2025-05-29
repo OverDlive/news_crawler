@@ -8,7 +8,7 @@ from urllib.parse import urlparse, unquote
 logger = logging.getLogger(__name__)
 
 SURICATA_BIN = os.getenv("SURICATA_BIN") or shutil.which("suricata") or "/usr/bin/suricata"
-URL_RULES_PATH = Path(os.getenv("SURICATA_URL_RULES_PATH", "/etc/suricata/rules/secbot-url.rules"))
+URL_RULES_PATH = Path(os.getenv("SURICATA_URL_RULES_PATH", "/etc/suricata/rules/secbot.rules"))
 PID_FILE = Path(os.getenv("SURICATA_PID_FILE", "/var/run/suricata.pid"))
 BASE_SID_URL = 7100000
 
