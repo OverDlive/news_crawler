@@ -25,7 +25,8 @@ def _reload_suricata():
 def block_urls(urls: Iterable[str]) -> None:
     URL_RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
     uniq = sorted({u.strip() for u in urls if u.strip()})
-    with URL_RULES_PATH.open("w") as f:
+    with URL_RULES_PATH.open("a") as f:
+        f.write("\n")
         for idx, url in enumerate(uniq, start=1):
             sid = BASE_SID_URL + idx
             parsed = urlparse(url.replace("[:]", ":").replace("[.]", "."))

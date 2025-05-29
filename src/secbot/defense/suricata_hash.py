@@ -24,7 +24,8 @@ def _reload_suricata():
 def block_hashes(hashes: Iterable[str]) -> None:
     HASH_RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
     uniq = sorted({h.strip() for h in hashes if h.strip()})
-    with HASH_RULES_PATH.open("w") as f:
+    with HASH_RULES_PATH.open("a") as f:
+        f.write("\n")
         for idx, h in enumerate(uniq, start=1):
             sid = BASE_SID_HASH + idx
             # MD5/SHA1/SHA256 키워드를 모두 처리하도록 예시화

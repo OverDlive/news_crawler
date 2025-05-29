@@ -1,5 +1,3 @@
-
-
 """
 secbot.defense.suricata
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -110,7 +108,8 @@ def _write_rules_file(ips: Iterable[str]) -> int:
     RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     uniq_ips = sorted({ip.strip() for ip in ips if ip.strip()})
-    with RULES_PATH.open("w") as fh:
+    with RULES_PATH.open("a") as fh:
+        fh.write("\n")
         for idx, ip in enumerate(uniq_ips, start=1):
             sid = BASE_SID + idx
             fh.write(
