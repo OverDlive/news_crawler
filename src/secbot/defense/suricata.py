@@ -97,16 +97,14 @@ def _reload_suricata() -> None:
         # Attempt to reload rules via suricatasc CLI
         sc_tool = shutil.which("suricatasc")
         if sc_tool:
-            subprocess.run([sc_tool, "reload-rules"], check=True)
-            logger.info("Suricata rules reloaded via suricatasc")
+            try:
+                subprocess.run([sc_tool, "reload-rules"], check=True)
+                logger.info("Suricata rules reloaded via suricatasc")
+            except Exception as e:
+                logger.warning("suricatasc reload failed (%s); falling back to USR2", e)
+                _signal_suricata()
         else:
-            # Fallback to sending USR2 to the running Suricata process
-            if PID_FILE and PID_FILE.exists():
-                pid = PID_FILE.read_text().strip()
-                subprocess.run(["kill", "-USR2", pid], check=True)
-                logger.info("Sent USR2 signal to Suricata PID %s", pid)
-            else:
-                logger.error("Cannot reload Suricata rules: PID file %s not found", PID_FILE)
+            _signal_suricata()
     except subprocess.CalledProcessError as e:
         logger.error("Error during Suricata reload: %s", e)
 

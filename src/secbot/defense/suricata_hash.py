@@ -16,14 +16,33 @@ def _reload_suricata() -> None:
     then using suricatasc if available, otherwise falling back to USR2 signal.
     """
     try:
-        config = os.getenv("SURICATA_CONFIG_PATH", "/etc/suricata/suricata.yaml")
-        subprocess.run([SURICATA_BIN, "-T", "-c", config], check=True)
-        sc = shutil.which("suricatasc")
-        if sc:
-            subprocess.run([sc, "reload-rules"], check=True)
-        elif PID_FILE.exists():
-            pid = PID_FILE.read_text().strip()
-            subprocess.run(["kill", "-USR2", pid], check=True)
+        # Test configuration syntax
+        config_path = os.getenv("SURICATA_CONFIG_PATH", "/etc/suricata/suricata.yaml")
+        subprocess.run([SURICATA_BIN, "-T", "-c", config_path], check=True)
+        logger.info("Suricata configuration test passed")
+        # Attempt hot-reload via suricatasc
+        sc_tool = shutil.which("suricatasc")
+        if sc_tool:
+            try:
+                subprocess.run([sc_tool, "reload-rules"], check=True)
+                logger.info("Suricata rules reloaded via suricatasc")
+            except Exception as e:
+                logger.warning("suricatasc reload-rules failed (%s); falling back to USR2", e)
+                # Fallback to USR2 signal
+                if PID_FILE.exists():
+                    pid = PID_FILE.read_text().strip()
+                    subprocess.run(["kill", "-USR2", pid], check=True)
+                    logger.info("Sent USR2 signal to Suricata PID %s", pid)
+                else:
+                    logger.error("Cannot reload Suricata: PID file %s not found", PID_FILE)
+        else:
+            # No suricatasc, fallback to USR2
+            if PID_FILE.exists():
+                pid = PID_FILE.read_text().strip()
+                subprocess.run(["kill", "-USR2", pid], check=True)
+                logger.info("Sent USR2 signal to Suricata PID %s", pid)
+            else:
+                logger.error("Cannot reload Suricata: PID file %s not found", PID_FILE)
     except subprocess.CalledProcessError as e:
         logger.error("Suricata reload failed: %s", e)
 
