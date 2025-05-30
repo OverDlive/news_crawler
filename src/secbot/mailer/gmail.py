@@ -73,21 +73,21 @@ def _build_body(
     lines: List[str] = []
 
     # Headline
-    lines.append(f"🛡️  Daily Security Digest – {_dt.date.today():%Y-%m-%d}")
+    lines.append(f"🛡️  관제 공화국 SecBot – {_dt.date.today():%Y-%m-%d}")
     lines.append("=" * 50)
 
     # News section
-    lines.append("\n[ Security News ]")
+    lines.append("\n[ 보안 뉴스 ]")
     lines.extend(item.to_md() if hasattr(item, "to_md") else f"- {item}" for item in news)
 
     # Advisory section
-    lines.append("\n[ Vulnerability / Advisory ]")
+    lines.append("\n[ KISA 취약점 공지 ]")
     lines.extend(
         adv.to_md() if hasattr(adv, "to_md") else f"- {adv}" for adv in advisories
     )
 
     # Malicious IOC details
-    lines.append("\n[ Malicious IOC ]")
+    lines.append("\n[ ASEC 데일리 IOC ]")
     # Sort IOC lists for display
     ips = sorted(iocs.get("ip", []))
     hashes = sorted(iocs.get("hash", []))
