@@ -35,6 +35,38 @@ RSS_FEEDS: List[str] = [
     "http://www.boannews.com/media/t_list.asp?Page=1&kind=",
 ]
 
+KEYWORDS: List[str] = [
+    "해킹",
+    "XSS",
+    "랜섬웨어",
+    "해커 조직",
+    "정보 유출",
+    "APT",
+    "디도스",
+    "취약점",
+    "익스플로잇",
+    "피싱",
+    "크리덴셜 스터핑",
+    "스피어 피싱",
+    "제로데이",
+    "버퍼 오버플로우",
+    "SQL 인젝션",
+    "악성코드",
+    "봇넷",
+    "트로이목마",
+    "백도어",
+    "크립토재킹",
+    "루트킷",
+    "사이버 공격",
+    "사이버 침해",
+    "유심 해킹",
+    "홈페이지 일시 중단",
+    "개인정보 유출",
+    "HSS",
+    "APT41",
+    "BPF도어"
+]
+
 
 @dataclass(slots=True)
 class NewsItem:
@@ -53,24 +85,41 @@ class NewsItem:
 def _fetch_feed(url: str) -> List[NewsItem]:
     """
     Download the 보안뉴스 전체기사 HTML page and return parsed NewsItem objects
-    containing title and link of each article.
+    containing title, link, and published date of each article.
     """
     logger.debug("Fetching HTML feed: %s", url)
-    # Use cloudscraper session to bypass any WAF challenges
     resp = _SCRAPER.get(url, timeout=10, verify=False)
     resp.raise_for_status()
     html = resp.text
 
     soup = _bs(html, "lxml")
     items: List[NewsItem] = []
-    # Article titles are in <span class="news_txt"> under <a>
-    for span in soup.select("span.news_txt"):
-        a = span.find_parent("a")
-        if not a or not a.get("href"):
+    # Each news article block is within div.news_list
+    for div in soup.select("div.news_list"):
+        # Title and link
+        a_tag = div.find("a")
+        if not a_tag or not a_tag.get("href"):
             continue
-        title = span.get_text(strip=True)
-        link = urljoin(url, a["href"])
-        items.append(NewsItem(title=title, link=link))
+        title_span = div.select_one("span.news_txt")
+        if not title_span:
+            continue
+        title = title_span.get_text(strip=True)
+        link = urljoin(url, a_tag["href"])
+        # Published date: find span.news_writer, text format "기자 | YYYY년 MM월 DD일 HH:MM"
+        date_span = div.select_one("span.news_writer")
+        published_date = None
+        if date_span:
+            # Extract the part after the "|" and strip whitespace
+            parts = date_span.get_text(strip=True).split("|")
+            if len(parts) == 2:
+                date_str = parts[1].strip()
+                try:
+                    # Parse Korean date format
+                    published_dt = _dt.datetime.strptime(date_str, "%Y년 %m월 %d일 %H:%M")
+                    published_date = published_dt.date()
+                except ValueError:
+                    published_date = None
+        items.append(NewsItem(title=title, link=link, published=published_date))
     logger.info("Parsed %d items from HTML %s", len(items), url)
     return items
 
@@ -78,30 +127,31 @@ def _fetch_feed(url: str) -> List[NewsItem]:
 
 def get(*, limit: int = 10) -> List[NewsItem]:
     """
-    Return the latest *limit* security news headlines across all feeds.
-
-    Parameters
-    ----------
-    limit:
-        Max number of items to return (default 10).
-
-    Notes
-    -----
-    The function merges multiple feeds, sorts by date (fallback to order),
-    removes duplicates, and truncates to *limit*.
+    Return today's security news headlines matching keywords, up to *limit* items.
     """
     all_items: List[NewsItem] = []
     for url in RSS_FEEDS:
         time.sleep(1)
         try:
             all_items.extend(_fetch_feed(url))
-        except Exception as exc:  # feedparser returns Exceptions for bad feeds
+        except Exception as exc:
             logger.warning("Skip feed %s due to error: %s", url, exc)
 
-    # 정렬: published가 있다면 최신순, 없으면 그대로
+    # Filter only today's articles
+    today = _dt.date.today()
+    all_items = [item for item in all_items if item.published == today]
+
+    # Keyword-based filtering
+    all_items = [
+        item
+        for item in all_items
+        if any(keyword.lower() in item.title.lower() for keyword in KEYWORDS)
+    ]
+
+    # 정렬: published 날짜 기준 최신순
     all_items.sort(key=lambda n: n.published or _dt.date.min, reverse=True)
 
-    # 링크 중복 제거
+    # 링크 중복 제거 및 limit 개수만큼 자르기
     seen = set()
     deduped: List[NewsItem] = []
     for item in all_items:
@@ -112,5 +162,5 @@ def get(*, limit: int = 10) -> List[NewsItem]:
         if len(deduped) >= limit:
             break
 
-    logger.info("Returning %d merged news items", len(deduped))
+    logger.info("Returning %d merged news items after filtering", len(deduped))
     return deduped
