@@ -235,9 +235,11 @@ def send_digest(
     date_str = _dt.date.today().strftime("%Y-%m-%d")
 
     # send each section as its own email
-    send_security_news(news, subject=subject or f"[SecBot] Security News {date_str}")
-    send_advisories(advisories, subject=subject or f"[SecBot] Vulnerability Advisories {date_str}")
-    send_iocs(iocs, subject=subject or f"[SecBot] Malicious IOC {date_str}")
+    send_security_news(news, subject=subject or f"[관제공화국] 보안정보뉴스 {date_str}")
+    # Only send advisory if there are advisories for today
+    if advisories:
+        send_advisories(advisories, subject=subject or f"[관제공화국] KISA 보안공지 {date_str}")
+    send_iocs(iocs, subject=subject or f"[관제공화국] ASEC IOC {date_str}")
 
 def send_security_news(news: Iterable, *, subject: str | None = None) -> None:
     """

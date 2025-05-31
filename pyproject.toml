@@ -52,6 +52,7 @@ dependencies = [
   "python-dateutil>=2.8",
   "pydantic-settings>=2.0",
   "reportlab>=3.6.12",
+  "pytz>=2023.3",
 
   # Gmail OAuth2 / App‑Password support
   "google-auth-oauthlib>=1.2",

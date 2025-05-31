@@ -1,5 +1,3 @@
-
-
 """
 secbot.fetchers.advisory
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -27,6 +25,7 @@ from dataclasses import dataclass
 from typing import List
 
 import feedparser as _fp
+import pytz
 
 logger = logging.getLogger(__name__)
 
@@ -78,15 +77,33 @@ def get(*, limit: int = 10) -> List[Advisory]:
 
     items: List[Advisory] = []
     for entry in feed.entries[:limit]:
-        published = _parse_date(entry.get("published") or entry.get("updated"))
+        # Parse published_parsed if available, else fallback to regex
+        published_struct = entry.get("published_parsed") or entry.get("updated_parsed")
+        if published_struct:
+            # Convert to datetime in UTC, then to Asia/Seoul
+            published_dt_utc = _dt.datetime.utcfromtimestamp(_dt.datetime(*published_struct[:6]).timestamp())
+            try:
+                import pytz
+                seoul_tz = pytz.timezone("Asia/Seoul")
+                published_dt = published_dt_utc.replace(tzinfo=_dt.timezone.utc).astimezone(seoul_tz)
+                published_date = published_dt.date()
+            except ImportError:
+                # If pytz is not available, use date from struct directly
+                published_date = _dt.date(published_struct.tm_year, published_struct.tm_mon, published_struct.tm_mday)
+        else:
+            # Fallback to string-based parsing
+            published_date = _parse_date(entry.get("published") or entry.get("updated"))
+        # Append only if published_date is today in Seoul
+        today = _dt.datetime.now(_dt.timezone(_dt.timedelta(hours=9))).date()
+        if published_date != today:
+            continue
         items.append(
             Advisory(
                 title=entry.get("title", "").strip(),
                 link=entry.get("link", "").strip(),
-                published=published,
+                published=published_date,
                 summary=(entry.get("summary") or entry.get("description") or "").strip(),
             )
         )
-
     logger.info("Fetched %d advisory items", len(items))
     return items
