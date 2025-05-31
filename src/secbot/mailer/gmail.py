@@ -165,14 +165,14 @@ def generate_pdf_report(news, advisories, iocs) -> bytes:
     story.append(Spacer(1, 12))
 
     # Advisory section
-    story.append(Paragraph("Vulnerability / Advisory", styles["Heading2"]))
+    story.append(Paragraph("KISA 보안 공지", styles["Heading2"]))
     for adv in advisories:
         text = adv.to_md() if hasattr(adv, "to_md") else str(adv)
         story.append(Paragraph(text, styles["BodyText"]))
     story.append(Spacer(1, 12))
 
     # IOC section
-    story.append(Paragraph("Malicious IOC", styles["Heading2"]))
+    story.append(Paragraph("ASEC IOC", styles["Heading2"]))
     for category in ("ip", "hash", "url"):
         items = sorted(iocs.get(category, []))
         story.append(Paragraph(f"{category.upper()} ({len(items)})", styles["Heading3"]))
@@ -247,18 +247,18 @@ def send_security_news(news: Iterable, *, subject: str | None = None) -> None:
     msg = EmailMessage()
     msg["From"] = SMTP_USER
     msg["To"] = ", ".join(MAIL_TO)
-    msg["Subject"] = subject or f"[SecBot] Security News {today:%Y-%m-%d}"
+    msg["Subject"] = subject or f"[관제공화국] 보안뉴스 {today:%Y-%m-%d}"
     # Build news-only body
     lines: List[str] = [
-        f"🛡️  Security News – {today:%Y-%m-%d}",
+        f"🛡️  보안뉴스 – {today:%Y-%m-%d}",
         "=" * 50,
-        "\n[ Security News ]"
+        "\n[ 보안뉴스 ]"
     ]
     lines.extend(
         item.to_md() if hasattr(item, "to_md") else f"- {item}"
         for item in news
     )
-    lines.append("\n— Sent automatically by SecBot\n")
+    lines.append("\n— Sent automatically by 관제공화국\n")
     msg.set_content("\n".join(lines))
     send(msg)
 
@@ -270,18 +270,18 @@ def send_advisories(advisories: Iterable, *, subject: str | None = None) -> None
     msg = EmailMessage()
     msg["From"] = SMTP_USER
     msg["To"] = ", ".join(MAIL_TO)
-    msg["Subject"] = subject or f"[SecBot] Vulnerability Advisories {today:%Y-%m-%d}"
+    msg["Subject"] = subject or f"[관제공화국] KISA 보안공지 {today:%Y-%m-%d}"
     # Build advisory-only body
     lines: List[str] = [
-        f"🛡️  Vulnerability / Advisory – {today:%Y-%m-%d}",
+        f"🛡️  KISA 보안공지 – {today:%Y-%m-%d}",
         "=" * 50,
-        "\n[ Vulnerability / Advisory ]"
+        "\n[ KISA 보안공지]"
     ]
     lines.extend(
         adv.to_md() if hasattr(adv, "to_md") else f"- {adv}"
         for adv in advisories
     )
-    lines.append("\n— Sent automatically by SecBot\n")
+    lines.append("\n— Sent automatically by 관제공화국\n")
     msg.set_content("\n".join(lines))
     send(msg)
 
@@ -293,12 +293,12 @@ def send_iocs(iocs: dict, *, subject: str | None = None) -> None:
     msg = EmailMessage()
     msg["From"] = SMTP_USER
     msg["To"] = ", ".join(MAIL_TO)
-    msg["Subject"] = subject or f"[SecBot] Malicious IOC {today:%Y-%m-%d}"
+    msg["Subject"] = subject or f"[관제공화국] ASEC IOC {today:%Y-%m-%d}"
     # Build IOC-only body
     lines: List[str] = [
-        f"🛡️  Malicious IOC – {today:%Y-%m-%d}",
+        f"🛡️  ASEC IOC – {today:%Y-%m-%d}",
         "=" * 50,
-        "\n[ Malicious IOC ]"
+        "\n[ ASEC IOC ]"
     ]
     ips = sorted(iocs.get("ip", []))
     hashes = sorted(iocs.get("hash", []))
@@ -312,7 +312,7 @@ def send_iocs(iocs: dict, *, subject: str | None = None) -> None:
     lines.append(f"- URL ({len(urls)}):")
     for u in urls:
         lines.append(f"    - {u}")
-    lines.append("\n— Sent automatically by SecBot\n")
+    lines.append("\n— Sent automatically by 관제공화국\n")
     msg.set_content("\n".join(lines))
     send(msg)
 
