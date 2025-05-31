@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Dict, List, Set, Iterable
+from typing import Dict, List, Set, Iterable, Any
 
 import bs4
 import requests
@@ -86,21 +86,25 @@ def _extract_iocs_from_html(html: str) -> Dict[str, Set[str]]:
 def get_iocs_from_url(url: str) -> Dict[str, List[str]]:
     """
     Fetch IOC data (IP, hash, URL) from a specific ASEC blog post URL.
+    추가로 통계(카운트)와 네트워크 공격 국가·포트 정보를 함께 가져옵니다.
     """
     try:
         soup = _soup_from_url(url)
     except requests.RequestException as exc:
         logger.error("Failed to fetch ASEC URL %s: %s", url, exc)
         return {k: [] for k in _PATTERNS}
-    text = soup.get_text(" ", strip=True)
-    # Extract raw text-based IOCs
-    src_iocs = _extract_iocs_from_html(text)
-    # Also extract URLs from anchor hrefs
+
+    # 1) 전체 텍스트를 한 줄로 합쳐서 IOC(정규표현식) 추출
+    full_text = soup.get_text(" ", strip=True)
+    src_iocs = _extract_iocs_from_html(full_text)
+
+    # 2) 앵커 태그 내 URL도 추가 추출
     for a in soup.find_all("a", href=True):
         href = a["href"]
         if _PATTERNS["url"].search(href):
             src_iocs["url"].add(href)
-    # Exclude navigation and homepage links not needed as IOC
+
+    # 3) AhnLab 내부 링크 제외
     exclude_urls = {
         "https://asec.ahnlab.com/",
         "https://asec.ahnlab.com/ko/87737/",
@@ -111,13 +115,57 @@ def get_iocs_from_url(url: str) -> Dict[str, List[str]]:
         "https://asec.ahnlab.com/ko/87792/",
         "https://asec.ahnlab.com/ko/87814/",
     }
-    # Exclude navigation, homepage, and any AhnLab domain URLs
     src_iocs["url"] = {
-        u for u in src_iocs["url"]
-        if u not in exclude_urls and "ahnlab.com" not in u
+        u for u in src_iocs["url"] if u not in exclude_urls and "ahnlab.com" not in u
     }
-    # Convert sets to sorted lists
-    return {k: sorted(v) for k, v in src_iocs.items()}
+
+    # Extract Hash, URL, IP counts which appear as three numbers in a row before "Top1"
+    hash_count = ""
+    url_count = ""
+    ip_count = ""
+    counts_match = re.search(
+        r"(\d{1,3}(?:,\d{3})*)\s+(\d{1,3}(?:,\d{3})*)\s+(\d{1,3}(?:,\d{3})*)\s+Top1",
+        full_text,
+        re.IGNORECASE,
+    )
+    if counts_match:
+        hash_count = counts_match.group(1)
+        url_count = counts_match.group(2)
+        ip_count = counts_match.group(3)
+    src_iocs["hash_count"] = {hash_count} if hash_count else set()
+    src_iocs["url_count"] = {url_count} if url_count else set()
+    src_iocs["ip_count"] = {ip_count} if ip_count else set()
+
+    # Extract all Top1 occurrences for country and port
+    top1_matches = re.findall(
+        r"Top1\s+([A-Za-z0-9\s]+)\s+(\d{1,3}(?:,\d{3})*)",
+        full_text,
+        re.IGNORECASE,
+    )
+    network_countries: Set[str] = set()
+    network_ports: Set[str] = set()
+    network_country_count = ""
+    network_port_count = ""
+    if top1_matches:
+        # The first Top1 match corresponds to the country
+        country_name, country_cnt = top1_matches[0]
+        network_countries.add(country_name.strip())
+        network_country_count = country_cnt.strip()
+        # If there's a second match, it's the port
+        if len(top1_matches) >= 2:
+            port_name, port_cnt = top1_matches[1]
+            network_ports.add(port_name.strip())
+            network_port_count = port_cnt.strip()
+    src_iocs["network_country"] = network_countries
+    src_iocs["country_count"] = {network_country_count} if network_country_count else set()
+    src_iocs["network_port"] = network_ports
+    src_iocs["port_count"] = {network_port_count} if network_port_count else set()
+
+    # 7) 모든 set 값을 sorted list로 변환하여 반환
+    return {
+        k: sorted(v) if isinstance(v, set) else v
+        for k, v in src_iocs.items()
+    }
 
 
 def get_latest_iocs(post_limit: int = 1) -> Dict[str, List[str]]:

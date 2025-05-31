@@ -298,20 +298,56 @@ def send_iocs(iocs: dict, *, subject: str | None = None) -> None:
     lines: List[str] = [
         f"🛡️  ASEC IOC – {today:%Y-%m-%d}",
         "=" * 50,
-        "\n[ ASEC IOC ]"
+        "\n[ ASEC IOC ]",
+        "\n수집된 IOC",
     ]
+    # 악성 파일, 악성 URL, 악성 IP with counts
+    hash_count = sorted(iocs.get("hash_count", []))
+    lines.append(f"· 악성 파일 {hash_count[0] if hash_count else '0'}")
+    url_count = sorted(iocs.get("url_count", []))
+    lines.append(f"· 악성 URL {url_count[0] if url_count else '0'}")
+    ip_count = sorted(iocs.get("ip_count", []))
+    lines.append(f"· 악성 IP {ip_count[0] if ip_count else '0'}")
+
+    # 네트워크 공격 국가 section
+    countries = sorted(iocs.get("network_country", []))
+    country_count = sorted(iocs.get("country_count", []))
+    lines.append("\n네트워크 공격 국가")
+    if countries and country_count:
+        # Assume Top1 only
+        lines.append(f"Top1 {countries[0]} · {country_count[0]}")
+    else:
+        lines.append("정보 없음")
+
+    # 네트워크 공격 대상 포트 section
+    ports = sorted(iocs.get("network_port", []))
+    port_count = sorted(iocs.get("port_count", []))
+    lines.append("\n네트워크 공격 대상 포트")
+    if ports and port_count:
+        lines.append(f"Top1 {ports[0]} · {port_count[0]}")
+    else:
+        lines.append("정보 없음")
+
+    # --- 여기서부터 세부 IOC 목록 추가 ---
     ips = sorted(iocs.get("ip", []))
+    if ips:
+        lines.append("\n악성 IP 목록:")
+        for ip in ips:
+            lines.append(f"    - {ip}")
+
     hashes = sorted(iocs.get("hash", []))
+    if hashes:
+        lines.append("\n악성 파일(해시) 목록:")
+        for h in hashes:
+            lines.append(f"    - {h}")
+
     urls = sorted(iocs.get("url", []))
-    lines.append(f"- IP ({len(ips)}):")
-    for ip in ips:
-        lines.append(f"    - {ip}")
-    lines.append(f"- HASH ({len(hashes)}):")
-    for h in hashes:
-        lines.append(f"    - {h}")
-    lines.append(f"- URL ({len(urls)}):")
-    for u in urls:
-        lines.append(f"    - {u}")
+    if urls:
+        lines.append("\n악성 URL 목록:")
+        for u in urls:
+            lines.append(f"    - {u}")
+    # --- 세부 IOC 목록 끝 ---
+
     lines.append("\n— Sent automatically by 관제공화국\n")
     msg.set_content("\n".join(lines))
     send(msg)
