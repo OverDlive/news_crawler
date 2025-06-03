@@ -161,59 +161,9 @@ def _get_auth_credentials() -> tuple[str, str | None]:
         "Neither SEC_BOT_SMTP_APP_PASSWORD nor SEC_BOT_SMTP_XOAUTH2 provided"
     )
 
-
-# -----------------------------------------------------------------------------
-# PDF Report Helper
-# -----------------------------------------------------------------------------
-
-def generate_pdf_report(news, advisories, iocs) -> bytes:
-    """
-    Build a PDF report from security news, advisories, and IOCs.
-    Returns the raw PDF bytes.
-    """
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer)
-    styles = getSampleStyleSheet()
-    story = []
-
-    # Title
-    title = f"Daily Security Report – {_dt.date.today():%Y-%m-%d}"
-    story.append(Paragraph(title, styles["Title"]))
-    story.append(Spacer(1, 12))
-
-    # News section
-    story.append(Paragraph("Security News", styles["Heading2"]))
-    for item in news:
-        text = item.to_md() if hasattr(item, "to_md") else str(item)
-        story.append(Paragraph(text, styles["BodyText"]))
-    story.append(Spacer(1, 12))
-
-    # Advisory section
-    story.append(Paragraph("KISA 보안 공지", styles["Heading2"]))
-    for adv in advisories:
-        text = adv.to_md() if hasattr(adv, "to_md") else str(adv)
-        story.append(Paragraph(text, styles["BodyText"]))
-    story.append(Spacer(1, 12))
-
-    # IOC section
-    story.append(Paragraph("ASEC IOC", styles["Heading2"]))
-    for category in ("ip", "hash", "url"):
-        items = sorted(iocs.get(category, []))
-        story.append(Paragraph(f"{category.upper()} ({len(items)})", styles["Heading3"]))
-        for entry in items:
-            story.append(Paragraph(str(entry), styles["BodyText"]))
-        story.append(Spacer(1, 6))
-
-    doc.build(story)
-    buffer.seek(0)
-    return buffer.read()
-
-
 # -----------------------------------------------------------------------------
 # Mail senders
 # -----------------------------------------------------------------------------
-
-
 def send(msg: EmailMessage) -> None:
     """
     Send *msg* via Gmail SMTP (SSL).
@@ -327,59 +277,29 @@ def send_iocs(iocs: dict, recipients: List[str], *, subject: str | None = None) 
     msg["From"] = SMTP_USER
     msg["To"] = ", ".join(recipients)
     msg["Subject"] = subject or f"[관제공화국] ASEC IOC {today:%Y-%m-%d}"
-    # Build IOC-only body
+    # Build IOC-only body with only IP, HASH, and URL sections
     lines: List[str] = [
         f"🛡️  ASEC IOC – {today:%Y-%m-%d}",
         "=" * 50,
         "\n[ ASEC IOC ]",
-        "\n수집된 IOC",
     ]
-    # 악성 파일, 악성 URL, 악성 IP with counts
-    hash_count = sorted(iocs.get("hash_count", []))
-    lines.append(f"· 악성 파일 {hash_count[0] if hash_count else '0'}")
-    url_count = sorted(iocs.get("url_count", []))
-    lines.append(f"· 악성 URL {url_count[0] if url_count else '0'}")
-    ip_count = sorted(iocs.get("ip_count", []))
-    lines.append(f"· 악성 IP {ip_count[0] if ip_count else '0'}")
-
-    # 네트워크 공격 국가 section
-    countries = sorted(iocs.get("network_country", []))
-    country_count = sorted(iocs.get("country_count", []))
-    lines.append("\n네트워크 공격 국가")
-    if countries and country_count:
-        # Assume Top1 only
-        lines.append(f"Top1 {countries[0]} · {country_count[0]}")
-    else:
-        lines.append("정보 없음")
-
-    # 네트워크 공격 대상 포트 section
-    ports = sorted(iocs.get("network_port", []))
-    port_count = sorted(iocs.get("port_count", []))
-    lines.append("\n네트워크 공격 대상 포트")
-    if ports and port_count:
-        lines.append(f"Top1 {ports[0]} · {port_count[0]}")
-    else:
-        lines.append("정보 없음")
-
-    # --- 여기서부터 세부 IOC 목록 추가 ---
+    # Extract lists
     ips = sorted(iocs.get("ip", []))
-    if ips:
-        lines.append("\n악성 IP 목록:")
-        for ip in ips:
-            lines.append(f"    - {ip}")
-
     hashes = sorted(iocs.get("hash", []))
-    if hashes:
-        lines.append("\n악성 파일(해시) 목록:")
-        for h in hashes:
-            lines.append(f"    - {h}")
-
     urls = sorted(iocs.get("url", []))
-    if urls:
-        lines.append("\n악성 URL 목록:")
-        for u in urls:
-            lines.append(f"    - {u}")
-    # --- 세부 IOC 목록 끝 ---
+
+    # Counts and lists
+    lines.append(f"- IP ({len(ips)}):")
+    for ip in ips:
+        lines.append(f"    - {ip}")
+
+    lines.append(f"- HASH ({len(hashes)}):")
+    for h in hashes:
+        lines.append(f"    - {h}")
+
+    lines.append(f"- URL ({len(urls)}):")
+    for u in urls:
+        lines.append(f"    - {u}")
 
     lines.append("\n— Sent automatically by 관제공화국\n")
     msg.set_content("\n".join(lines))

@@ -119,52 +119,10 @@ def get_iocs_from_url(url: str) -> Dict[str, List[str]]:
         u for u in src_iocs["url"] if u not in exclude_urls and "ahnlab.com" not in u
     }
 
-    # Extract Hash, URL, IP counts which appear as three numbers in a row before "Top1"
-    hash_count = ""
-    url_count = ""
-    ip_count = ""
-    counts_match = re.search(
-        r"(\d{1,3}(?:,\d{3})*)\s+(\d{1,3}(?:,\d{3})*)\s+(\d{1,3}(?:,\d{3})*)\s+Top1",
-        full_text,
-        re.IGNORECASE,
-    )
-    if counts_match:
-        hash_count = counts_match.group(1)
-        url_count = counts_match.group(2)
-        ip_count = counts_match.group(3)
-    src_iocs["hash_count"] = {hash_count} if hash_count else set()
-    src_iocs["url_count"] = {url_count} if url_count else set()
-    src_iocs["ip_count"] = {ip_count} if ip_count else set()
-
-    # Extract all Top1 occurrences for country and port
-    top1_matches = re.findall(
-        r"Top1\s+([A-Za-z0-9\s]+)\s+(\d{1,3}(?:,\d{3})*)",
-        full_text,
-        re.IGNORECASE,
-    )
-    network_countries: Set[str] = set()
-    network_ports: Set[str] = set()
-    network_country_count = ""
-    network_port_count = ""
-    if top1_matches:
-        # The first Top1 match corresponds to the country
-        country_name, country_cnt = top1_matches[0]
-        network_countries.add(country_name.strip())
-        network_country_count = country_cnt.strip()
-        # If there's a second match, it's the port
-        if len(top1_matches) >= 2:
-            port_name, port_cnt = top1_matches[1]
-            network_ports.add(port_name.strip())
-            network_port_count = port_cnt.strip()
-    src_iocs["network_country"] = network_countries
-    src_iocs["country_count"] = {network_country_count} if network_country_count else set()
-    src_iocs["network_port"] = network_ports
-    src_iocs["port_count"] = {network_port_count} if network_port_count else set()
-
-    # 7) 모든 set 값을 sorted list로 변환하여 반환
     return {
-        k: sorted(v) if isinstance(v, set) else v
-        for k, v in src_iocs.items()
+        "ip": sorted(src_iocs["ip"]),
+        "hash": sorted(src_iocs["hash"]),
+        "url": sorted(src_iocs["url"]),
     }
 
 
@@ -173,7 +131,7 @@ def get_latest_iocs(post_limit: int = 1) -> Dict[str, List[str]]:
     Fetch IOC data from the latest `post_limit` ASEC posts.
     Aggregates and deduplicates IP, hash, and URL.
     """
-    merged: Dict[str, set] = {k: set() for k in _PATTERNS}
+    merged: Dict[str, set] = {"ip": set(), "hash": set(), "url": set()}
     posts = get_posts(limit=post_limit)
     for url in posts:
         try:
@@ -183,4 +141,8 @@ def get_latest_iocs(post_limit: int = 1) -> Dict[str, List[str]]:
         for kind, items in iocs.items():
             merged[kind].update(items)
     # Convert to sorted lists
-    return {k: sorted(v) for k, v in merged.items()}
+    return {
+        "ip": sorted(merged["ip"]),
+        "hash": sorted(merged["hash"]),
+        "url": sorted(merged["url"]),
+    }
