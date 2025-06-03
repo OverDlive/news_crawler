@@ -53,6 +53,30 @@ MAIL_TO: List[str] = [
     if addr.strip()
 ]
 
+# -----------------------------------------------------------------------------
+# Separate recipient lists
+# -----------------------------------------------------------------------------
+CUSTOMER_MAIL_TO: List[str] = [
+    addr.strip()
+    for addr in os.getenv("SEC_BOT_CUSTOMER_MAIL_TO", "").split(",")
+    if addr.strip()
+]
+TEAM_MAIL_TO: List[str] = [
+    addr.strip()
+    for addr in os.getenv("SEC_BOT_TEAM_MAIL_TO", "").split(",")
+    if addr.strip()
+]
+
+# If not set, warn
+if not CUSTOMER_MAIL_TO:
+    logger.warning(
+        "Customer recipient not configured. Set SEC_BOT_CUSTOMER_MAIL_TO in the environment."
+    )
+if not TEAM_MAIL_TO:
+    logger.warning(
+        "Team recipient not configured. Set SEC_BOT_TEAM_MAIL_TO in the environment."
+    )
+
 if not SMTP_USER or not MAIL_TO:
     logger.warning(
         "Gmail sender or recipient not configured. Set SEC_BOT_SMTP_USER and "
@@ -206,7 +230,7 @@ def send(msg: EmailMessage) -> None:
             server.login(user, secret)  # App‑Password
 
         server.send_message(msg)
-        logger.info("E‑mail successfully sent to %s", ", ".join(MAIL_TO))
+        logger.info("E‑mail successfully sent to %s", msg["To"])
 
 
 def send_digest(
@@ -234,21 +258,28 @@ def send_digest(
     # determine today's date
     date_str = _dt.date.today().strftime("%Y-%m-%d")
 
-    # send each section as its own email
-    send_security_news(news, subject=subject or f"[관제공화국] 보안정보뉴스 {date_str}")
+    # send each section as its own email to Customer and Team
+    # 1) Security News to Customer
+    send_security_news(news, CUSTOMER_MAIL_TO, subject=subject or f"[관제공화국] 보안정보뉴스 {date_str}")
+    # 2) Security News to Team
+    send_security_news(news, TEAM_MAIL_TO, subject=subject or f"[관제공화국] 보안정보뉴스 {date_str}")
     # Only send advisory if there are advisories for today
     if advisories:
-        send_advisories(advisories, subject=subject or f"[관제공화국] KISA 보안공지 {date_str}")
-    send_iocs(iocs, subject=subject or f"[관제공화국] ASEC IOC {date_str}")
+        # KISA Advisories to Customer
+        send_advisories(advisories, CUSTOMER_MAIL_TO, subject=subject or f"[관제공화국] KISA 보안공지 {date_str}")
+        # KISA Advisories to Team
+        send_advisories(advisories, TEAM_MAIL_TO, subject=subject or f"[관제공화국] KISA 보안공지 {date_str}")
+    # ASEC IOC only to Team
+    send_iocs(iocs, TEAM_MAIL_TO, subject=subject or f"[관제공화국] ASEC IOC {date_str}")
 
-def send_security_news(news: Iterable, *, subject: str | None = None) -> None:
+def send_security_news(news: Iterable, recipients: List[str], *, subject: str | None = None) -> None:
     """
     Send only the Security News section as an email.
     """
     today = _dt.date.today()
     msg = EmailMessage()
     msg["From"] = SMTP_USER
-    msg["To"] = ", ".join(MAIL_TO)
+    msg["To"] = ", ".join(recipients)
     msg["Subject"] = subject or f"[관제공화국] 보안뉴스 {today:%Y-%m-%d}"
     # Build news-only body
     lines: List[str] = [
@@ -264,14 +295,14 @@ def send_security_news(news: Iterable, *, subject: str | None = None) -> None:
     msg.set_content("\n".join(lines))
     send(msg)
 
-def send_advisories(advisories: Iterable, *, subject: str | None = None) -> None:
+def send_advisories(advisories: Iterable, recipients: List[str], *, subject: str | None = None) -> None:
     """
     Send only the Vulnerability / Advisory section as an email.
     """
     today = _dt.date.today()
     msg = EmailMessage()
     msg["From"] = SMTP_USER
-    msg["To"] = ", ".join(MAIL_TO)
+    msg["To"] = ", ".join(recipients)
     msg["Subject"] = subject or f"[관제공화국] KISA 보안공지 {today:%Y-%m-%d}"
     # Build advisory-only body
     lines: List[str] = [
@@ -287,14 +318,14 @@ def send_advisories(advisories: Iterable, *, subject: str | None = None) -> None
     msg.set_content("\n".join(lines))
     send(msg)
 
-def send_iocs(iocs: dict, *, subject: str | None = None) -> None:
+def send_iocs(iocs: dict, recipients: List[str], *, subject: str | None = None) -> None:
     """
     Send only the Malicious IOC section as an email.
     """
     today = _dt.date.today()
     msg = EmailMessage()
     msg["From"] = SMTP_USER
-    msg["To"] = ", ".join(MAIL_TO)
+    msg["To"] = ", ".join(recipients)
     msg["Subject"] = subject or f"[관제공화국] ASEC IOC {today:%Y-%m-%d}"
     # Build IOC-only body
     lines: List[str] = [
@@ -367,7 +398,7 @@ def send_report(news, advisories, iocs, *, subject: str | None = None) -> None:
     date_str = today.strftime("%Y-%m-%d")
     msg = EmailMessage()
     msg["From"] = SMTP_USER
-    msg["To"] = ", ".join(MAIL_TO)
+    msg["To"] = ", ".join(TEAM_MAIL_TO)
     msg["Subject"] = subject or f"[SecBot] Daily Security Report {date_str}"
     # Plain-text fallback
     msg.set_content(f"Please find attached the Daily Security Report for {date_str}.")
