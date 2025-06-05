@@ -111,28 +111,53 @@ def _reload_suricata() -> None:
 
 def _write_rules_file(ips: Iterable[str]) -> int:
     """
-    *ips*에서 생성된 IP 차단 규칙으로 RULES_PATH를 덮어씁니다.
+    *ips*에서 생성된 IP 차단 규칙으로 RULES_PATH를 갱신합니다.
+    기존 파일에 있던 IP는 유지하고, 새로운 IP는 하단에 추가하며 중복은 제거합니다.
 
     반환값
     -------
     int
-        작성된 규칙의 개수를 반환합니다.
+        최종 파일에 포함된 규칙의 총 IP 개수를 반환합니다.
     """
     RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
-    uniq_ips = sorted({ip.strip() for ip in ips if ip.strip()})
+
+    # 1) 입력된 IP 목록 정제
+    new_ips = [ip.strip() for ip in ips if ip.strip()]
+
+    # 2) 기존 RULES_PATH에서 이미 기록된 IP 파싱
+    existing_ips: list[str] = []
+    if RULES_PATH.exists():
+        with RULES_PATH.open("r") as fh:
+            for line in fh:
+                # 룰 라인에서 IP를 추출 (두 번째 토큰으로 위치 가정)
+                parts = line.split()
+                if len(parts) >= 5 and parts[0] == "drop":
+                    ip_token = parts[3]
+                    if ip_token not in existing_ips:
+                        existing_ips.append(ip_token)
+
+    # 3) 최종 IP 목록 결정: 기존 순서 유지, 새로운 IP는 뒤에 추가
+    final_ips: list[str] = existing_ips.copy()
+    for ip in new_ips:
+        if ip not in existing_ips:
+            final_ips.append(ip)
+
+    # 4) RULES_PATH에 덮어쓰기
     with RULES_PATH.open("w") as fh:
-        for idx, ip in enumerate(uniq_ips, start=1):
-            sid = BASE_SID + idx
+        for idx, ip in enumerate(final_ips, start=1):
+            sid_in = BASE_SID + idx
+            sid_out = BASE_SID + idx + len(final_ips)
             fh.write(
                 f'drop ip any any -> {ip} any '
-                f'(msg:"SecBot malicious IP {ip}"; sid:{sid}; rev:1;)\n'
+                f'(msg:"SecBot malicious IP {ip}"; sid:{sid_in}; rev:1;)\n'
             )
             fh.write(
                 f'drop ip {ip} any -> any any '
-                f'(msg:"SecBot malicious IP {ip} outgoing"; sid:{BASE_SID + idx + len(uniq_ips)}; rev:1;)\n'
+                f'(msg:"SecBot malicious IP {ip} outgoing"; sid:{sid_out}; rev:1;)\n'
             )
-    logger.info("Wrote %d Suricata IP‑block rules to %s", len(uniq_ips), RULES_PATH)
-    return len(uniq_ips)
+
+    logger.info("Wrote %d Suricata IP‑block rules to %s", len(final_ips), RULES_PATH)
+    return len(final_ips)
 
 
 def block(ips: Iterable[str]) -> None:
