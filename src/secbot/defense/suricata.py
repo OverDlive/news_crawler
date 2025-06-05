@@ -41,8 +41,6 @@ import subprocess
 from pathlib import Path
 from typing import Iterable, List
 
-from secbot.fetchers.asec import parse_ips as parse_asec_ips
-
 logger = logging.getLogger(__name__)
 
 SURICATA_BIN: str = (
