@@ -41,6 +41,8 @@ import subprocess
 from pathlib import Path
 from typing import Iterable, List
 
+from secbot.fetchers.asec import parse_ips as parse_asec_ips
+
 logger = logging.getLogger(__name__)
 
 SURICATA_BIN: str = (
@@ -126,6 +128,10 @@ def _write_rules_file(ips: Iterable[str]) -> int:
             fh.write(
                 f'drop ip any any -> {ip} any '
                 f'(msg:"SecBot malicious IP {ip}"; sid:{sid}; rev:1;)\n'
+            )
+            fh.write(
+                f'drop ip {ip} any -> any any '
+                f'(msg:"SecBot malicious IP {ip} outgoing"; sid:{BASE_SID + idx + len(uniq_ips)}; rev:1;)\n'
             )
     logger.info("Wrote %d Suricata IP‑block rules to %s", len(uniq_ips), RULES_PATH)
     return len(uniq_ips)
