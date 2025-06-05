@@ -304,26 +304,3 @@ def send_iocs(iocs: dict, recipients: List[str], *, subject: str | None = None) 
     lines.append("\n— Sent automatically by 관제공화국\n")
     msg.set_content("\n".join(lines))
     send(msg)
-
-
-# -----------------------------------------------------------------------------
-# PDF Report sender
-# -----------------------------------------------------------------------------
-
-def send_report(news, advisories, iocs, *, subject: str | None = None) -> None:
-    """
-    Send a combined PDF report as an attachment via Gmail SMTP.
-    """
-    today = _dt.date.today()
-    date_str = today.strftime("%Y-%m-%d")
-    msg = EmailMessage()
-    msg["From"] = SMTP_USER
-    msg["To"] = ", ".join(TEAM_MAIL_TO)
-    msg["Subject"] = subject or f"[SecBot] Daily Security Report {date_str}"
-    # Plain-text fallback
-    msg.set_content(f"Please find attached the Daily Security Report for {date_str}.")
-    # Attach PDF
-    pdf_bytes = generate_pdf_report(news, advisories, iocs)
-    filename = f"security_report_{date_str}.pdf"
-    msg.add_attachment(pdf_bytes, maintype="application", subtype="pdf", filename=filename)
-    send(msg)
