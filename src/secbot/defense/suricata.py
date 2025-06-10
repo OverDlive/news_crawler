@@ -7,8 +7,8 @@ Daily‑SecBot extracts from threat‑intel sources.
 
 Strategy
 --------
-* A dedicated local rules file ``secbot‑blacklist.rules`` is generated.
-* Each IP becomes one `drop ip any any -> <ip> any (...)` signature.
+* A dedicated local rules file ``secbot.rules`` is generated.
+* Each IP becomes one bidirectional `drop ip <ip> any <> any any (...)` signature.
 * After the file is (over)written, Suricata is hot‑reloaded with
   ``--reload-rules`` or a USR2 signal (fallback).
 * SIDs are generated deterministically so duplicate IPs never create
@@ -23,7 +23,7 @@ Environment Variables
 ---------------------
 SURICATA_RULES_PATH
     Where to write the blacklist file. Defaults to
-    ``/etc/suricata/rules/secbot-blacklist.rules``.
+    ``/etc/suricata/rules/secbot.rules``.
 
 SURICATA_BIN
     Path to Suricata executable (auto‑detected via shutil.which).
@@ -40,6 +40,7 @@ import shutil
 import subprocess
 from pathlib import Path
 from typing import Iterable, List
+import ipaddress
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +110,19 @@ def _reload_suricata() -> None:
         logger.error("Error during Suricata reload: %s", e)
 
 
+def _normalize_ip(value: str) -> str | None:
+    """Return a clean IP address or ``None`` if invalid."""
+    if not value:
+        return None
+    ip_str = value.strip().replace("[.]", ".")
+    try:
+        ip = ipaddress.ip_address(ip_str)
+    except ValueError:
+        logger.warning("Invalid IP skipped: %s", value)
+        return None
+    return str(ip)
+
+
 def _write_rules_file(ips: Iterable[str]) -> int:
     """
     *ips*에서 생성된 IP 차단 규칙으로 RULES_PATH를 갱신합니다.
@@ -121,8 +135,12 @@ def _write_rules_file(ips: Iterable[str]) -> int:
     """
     RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    # 1) 입력된 IP 목록 정제
-    new_ips = [ip.strip() for ip in ips if ip.strip()]
+    # 1) 입력된 IP 목록 정제 및 검증
+    new_ips = []
+    for raw in ips:
+        clean = _normalize_ip(raw)
+        if clean and clean not in new_ips:
+            new_ips.append(clean)
 
     # 2) 기존 RULES_PATH에서 이미 기록된 IP 파싱
     existing_ips: list[str] = []
@@ -147,8 +165,10 @@ def _write_rules_file(ips: Iterable[str]) -> int:
                     elif arrow == 4:
                         ip_token = parts[2]
 
-                if ip_token and ip_token not in existing_ips:
-                    existing_ips.append(ip_token)
+                if ip_token:
+                    clean = _normalize_ip(ip_token)
+                    if clean and clean not in existing_ips:
+                        existing_ips.append(clean)
 
     # 3) 최종 IP 목록 결정: 기존 순서 유지, 새로운 IP는 뒤에 추가
     final_ips: list[str] = existing_ips.copy()
