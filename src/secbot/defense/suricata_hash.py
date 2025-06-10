@@ -48,7 +48,7 @@ def _reload_suricata() -> None:
 
 def block_hashes(hashes: Iterable[str]) -> None:
     """
-    SHA256 해시 리스트 파일과 단일 룰을 생성한 뒤
+    MD5 해시 리스트 파일과 단일 룰을 생성한 뒤
     Suricata를 재로드합니다.
     """
     # 1) 중복 제거·소문자 정렬
@@ -65,7 +65,7 @@ def block_hashes(hashes: Iterable[str]) -> None:
         rf.write(
             f'drop http any any -> any any '
             f'(msg:"SecBot malicious file download"; '
-            f'flow:established; filesha256:{HASH_LIST_PATH.name}; '
+            f'flow:established; filemd5:{HASH_LIST_PATH.name}; '
             f'sid:{BASE_SID_HASH}; rev:1;)\n'
         )
 
