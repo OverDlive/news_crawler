@@ -129,10 +129,15 @@ def _write_rules_file(ips: Iterable[str]) -> int:
     if RULES_PATH.exists():
         with RULES_PATH.open("r") as fh:
             for line in fh:
-                # 룰 라인에서 IP를 추출 (두 번째 토큰으로 위치 가정)
+                # Generate rules ourselves, so we know the format:
+                #   drop ip any any -> <IP> any (...)
+                #   drop ip <IP> any -> any any (...)
                 parts = line.split()
-                if len(parts) >= 5 and parts[0] == "drop":
-                    ip_token = parts[3]
+                if len(parts) >= 7 and parts[0] == "drop" and parts[1] == "ip":
+                    if parts[2] == "any":  # incoming rule
+                        ip_token = parts[5]
+                    else:  # outgoing rule
+                        ip_token = parts[2]
                     if ip_token not in existing_ips:
                         existing_ips.append(ip_token)
 
