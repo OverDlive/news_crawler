@@ -78,3 +78,20 @@ def test_suricata_block_writes_rules(monkeypatch, tmp_path):
 
     # Reload should be triggered once
     assert reload_called["count"] == 1
+
+
+def test_suricata_block_merges_existing_rules(monkeypatch, tmp_path):
+    """Second call should preserve previous IPs and avoid 'any' tokens."""
+    import secbot.defense.suricata as s
+
+    rules_path = tmp_path / "secbot.rules"
+    monkeypatch.setattr(s, "RULES_PATH", rules_path)
+    monkeypatch.setattr(s, "_reload_suricata", lambda: None)
+
+    s.block(["1.1.1.1"])
+    s.block(["2.2.2.2"])
+
+    text = rules_path.read_text()
+    assert "1.1.1.1" in text
+    assert "2.2.2.2" in text
+    assert "any any -> any any" not in text
