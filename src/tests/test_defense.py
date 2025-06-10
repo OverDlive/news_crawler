@@ -74,7 +74,7 @@ def test_suricata_block_writes_rules(monkeypatch, tmp_path):
     assert rules_path.exists()
     text = rules_path.read_text()
     for ip in ips:
-        assert ip in text
+        assert f"drop ip {ip} any <> any any" in text
 
     # Reload should be triggered once
     assert reload_called["count"] == 1
@@ -94,4 +94,5 @@ def test_suricata_block_merges_existing_rules(monkeypatch, tmp_path):
     text = rules_path.read_text()
     assert "1.1.1.1" in text
     assert "2.2.2.2" in text
-    assert "any any -> any any" not in text
+    assert "<>" in text
+    assert "->" not in text
