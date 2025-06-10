@@ -93,7 +93,8 @@ docker run -d --env-file .env --name secbot secbot-prod
 
 | 변수 | 기본값 | 설명 |
 |------|--------|------|
-|`SEC_BOT_CRON_TIME`|`06:00`|일일 실행 시각(HH:MM, 로컬)|
+|`SEC_BOT_CRON_TIME`|`06:00`|뉴스/공지 메일 시각 목록(HH:MM, 로컬)|
+|`SEC_BOT_IOC_TIME`|`10:00`|하루 한 번 IOC 메일 및 차단 시각|
 |`SEC_BOT_NEWS_LIMIT`|`10`|실행당 뉴스 헤드라인 개수(1‑50)|
 |`SEC_BOT_ASEC_LIMIT`|`5`|ASEC 게시글 파싱 개수(1‑20)|
 |`SEC_BOT_ENABLE_IPSET`|`true`|ipset 차단 활성화 여부|
