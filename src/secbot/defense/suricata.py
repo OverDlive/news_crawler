@@ -129,17 +129,26 @@ def _write_rules_file(ips: Iterable[str]) -> int:
     if RULES_PATH.exists():
         with RULES_PATH.open("r") as fh:
             for line in fh:
-                # Generate rules ourselves, so we know the format:
-                #   drop ip any any -> <IP> any (...)
-                #   drop ip <IP> any -> any any (...)
+                # 기존 룰 형식 두 가지를 모두 인식한다.
+                # 1) 옛 버전: "drop ip any any -> <IP> any" 및 반대 방향
+                # 2) 새 버전: "drop ip <IP> any <> any any"
                 parts = line.split()
-                if len(parts) >= 7 and parts[0] == "drop" and parts[1] == "ip":
-                    if parts[2] == "any":  # incoming rule
-                        ip_token = parts[5]
-                    else:  # outgoing rule
+                if len(parts) < 3 or parts[0] != "drop" or parts[1] != "ip":
+                    continue
+
+                ip_token = None
+                if "<>" in parts:
+                    # bidirectional rule "drop ip <IP> any <> any any"
+                    ip_token = parts[2]
+                elif "->" in parts:
+                    arrow = parts.index("->")
+                    if arrow == 3:
+                        ip_token = parts[arrow + 1]
+                    elif arrow == 4:
                         ip_token = parts[2]
-                    if ip_token not in existing_ips:
-                        existing_ips.append(ip_token)
+
+                if ip_token and ip_token not in existing_ips:
+                    existing_ips.append(ip_token)
 
     # 3) 최종 IP 목록 결정: 기존 순서 유지, 새로운 IP는 뒤에 추가
     final_ips: list[str] = existing_ips.copy()
@@ -150,15 +159,10 @@ def _write_rules_file(ips: Iterable[str]) -> int:
     # 4) RULES_PATH에 덮어쓰기
     with RULES_PATH.open("w") as fh:
         for idx, ip in enumerate(final_ips, start=1):
-            sid_in = BASE_SID + idx
-            sid_out = BASE_SID + idx + len(final_ips)
+            sid = BASE_SID + idx
             fh.write(
-                f'drop ip any any -> {ip} any '
-                f'(msg:"SecBot malicious IP {ip}"; sid:{sid_in}; rev:1;)\n'
-            )
-            fh.write(
-                f'drop ip {ip} any -> any any '
-                f'(msg:"SecBot malicious IP {ip} outgoing"; sid:{sid_out}; rev:1;)\n'
+                f'drop ip {ip} any <> any any '
+                f'(msg:"SecBot malicious IP {ip}"; sid:{sid}; rev:1;)\n'
             )
 
     logger.info("Wrote %d Suricata IP‑block rules to %s", len(final_ips), RULES_PATH)
