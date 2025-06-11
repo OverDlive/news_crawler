@@ -56,27 +56,55 @@ def block_urls(urls: Iterable[str]) -> None:
     # Prepare unique, sorted URL list
     uniq_urls = sorted({u.strip() for u in urls if u.strip()})
 
-    # Ensure rules directory exists
+    # 3) Ensure rules directory exists
     URL_RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    # Overwrite the rule file with fresh rules
-    with URL_RULES_PATH.open("w") as f:
-        for idx, url in enumerate(uniq_urls, start=1):
-            sid = BASE_SID_URL + idx
-            parsed = urlparse(url.replace("[:]", ":").replace("[.]", "."))
-            host = parsed.hostname or ""
-            path = unquote(parsed.path or "/")
-            uri = path + (f"?{parsed.query}" if parsed.query else "")
-            rule = (
-                f'drop http any any -> any any '
-                f'(msg:"SecBot malicious URL {url}"; '
-                f'http.host; content:"{host}"; '
-                f'http.uri; content:"{uri}"; '
-                f'sid:{sid}; rev:1;)'
-            )
-            f.write(rule + "\n")
+    # 4) Read existing rules to avoid duplicates
+    existing_urls = set()
+    if URL_RULES_PATH.exists():
+        with URL_RULES_PATH.open("r") as f_old:
+            for line in f_old:
+                # Extract the URL from the msg field: msg:"SecBot malicious URL {url}";
+                try:
+                    # URL is between 'SecBot malicious URL ' and '";'
+                    part = line.split('msg:"SecBot malicious URL ', 1)[1]
+                    url_str = part.split('";', 1)[0]
+                    existing_urls.add(url_str)
+                except Exception:
+                    continue
 
-    logger.info("Wrote %d URL-block rules to %s", len(uniq_urls), URL_RULES_PATH)
+    # 5) Determine new URLs to write
+    new_urls = [u for u in uniq_urls if u not in existing_urls]
+
+    if not URL_RULES_PATH.exists():
+        # If file does not exist, write all rules
+        mode = "w"
+        urls_to_write = uniq_urls
+    else:
+        # Append only new rules
+        mode = "a"
+        urls_to_write = new_urls
+
+    # 6) Write or append rules
+    if urls_to_write:
+        with URL_RULES_PATH.open(mode) as f:
+            for idx, url in enumerate(urls_to_write, start=BASE_SID_URL + (len(existing_urls) if mode == "a" else 0) - BASE_SID_URL + 1):
+                sid = BASE_SID_URL + idx
+                parsed = urlparse(url.replace("[:]", ":").replace("[.]", "."))
+                host = parsed.hostname or ""
+                path = unquote(parsed.path or "/")
+                uri = path + (f"?{parsed.query}" if parsed.query else "")
+                rule = (
+                    f'drop http any any -> any any '
+                    f'(msg:"SecBot malicious URL {url}"; '
+                    f'http.host; content:"{host}"; '
+                    f'http.uri; content:"{uri}"; '
+                    f'sid:{sid}; rev:1;)'
+                )
+                f.write(rule + "\n")
+        logger.info("Appended %d new URL-block rule(s) to %s", len(urls_to_write), URL_RULES_PATH)
+    else:
+        logger.debug("No new URLs to write; %s unchanged", URL_RULES_PATH)
 
     # Reload Suricata to apply new rules
     _reload_suricata()

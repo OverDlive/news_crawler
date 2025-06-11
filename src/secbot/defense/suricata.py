@@ -176,17 +176,31 @@ def _write_rules_file(ips: Iterable[str]) -> int:
         if ip not in existing_ips:
             final_ips.append(ip)
 
-    # 4) RULES_PATH에 덮어쓰기
-    with RULES_PATH.open("w") as fh:
-        for idx, ip in enumerate(final_ips, start=1):
-            sid = BASE_SID + idx
-            fh.write(
-                f'drop ip {ip} any <> any any '
-                f'(msg:"SecBot malicious IP {ip}"; sid:{sid}; rev:1;)\n'
-            )
+    # 4) 신규 IP만 파일에 추가 (기존 IP는 유지)
+    if not RULES_PATH.exists():
+        # 파일이 없으면 최초 작성: write mode로 모든 final_ips 기록
+        mode = "w"
+        ips_to_write = final_ips
+        start_index = 1
+    else:
+        # 파일이 있으면 append mode로 새로운 IP만 기록
+        mode = "a"
+        ips_to_write = [ip for ip in final_ips if ip not in existing_ips]
+        start_index = len(existing_ips) + 1
 
-    logger.info("Wrote %d Suricata IP‑block rules to %s", len(final_ips), RULES_PATH)
-    return len(final_ips)
+    if ips_to_write:
+        with RULES_PATH.open(mode) as fh:
+            for idx, ip in enumerate(ips_to_write, start=start_index):
+                sid = BASE_SID + idx
+                fh.write(
+                    f'drop ip {ip} any <> any any '
+                    f'(msg:"SecBot malicious IP {ip}"; sid:{sid}; rev:1;)\n'
+                )
+        logger.info("Appended %d new Suricata IP‑block rule(s) to %s", len(ips_to_write), RULES_PATH)
+    else:
+        logger.debug("No new IPs to write; %s unchanged", RULES_PATH)
+
+    return len(existing_ips) + len(ips_to_write)
 
 
 def block(ips: Iterable[str]) -> None:
