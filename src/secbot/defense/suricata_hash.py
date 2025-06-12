@@ -54,20 +54,36 @@ def block_hashes(hashes: Iterable[str]) -> None:
     # 1) 중복 제거·소문자 정렬
     uniq = sorted({h.strip().lower() for h in hashes if h.strip()})
 
-    # 2) 리스트 파일 덮어쓰기
+    # 2) 해시 리스트 파일 덮어쓰기
     HASH_LIST_PATH.parent.mkdir(parents=True, exist_ok=True)
     with HASH_LIST_PATH.open("w") as lf:
         for h in uniq:
             lf.write(f"{h}\n")
 
-    # 3) 룰 파일 덮어쓰기 (단일 룰)
-    with HASH_RULES_PATH.open("w") as rf:
-        rf.write(
-            f'drop http any any -> any any '
-            f'(msg:"SecBot malicious file download"; '
-            f'flow:established; filemd5:{HASH_LIST_PATH.name}; '
-            f'sid:{BASE_SID_HASH}; rev:1;)\n'
-        )
+    # 3) 룰 파일 append 로직: 파일 생성 or 중복 검사 후 추가
+    HASH_RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    logger.info("Generated hash list (%d entries) and rule %s", len(uniq), HASH_RULES_PATH)
+    rule_line = (
+        f'drop http any any -> any any '
+        f'(msg:"SecBot malicious file download"; '
+        f'flow:established; filemd5:{HASH_LIST_PATH.name}; '
+        f'sid:{BASE_SID_HASH}; rev:1;)'
+    )
+
+    if not HASH_RULES_PATH.exists():
+        # 파일이 없으면 생성 후 룰 쓰기
+        with HASH_RULES_PATH.open("w") as rf:
+            rf.write(rule_line + "\n")
+        logger.info("Wrote hash rule to %s", HASH_RULES_PATH)
+    else:
+        # 파일이 있으면 중복 검사 후 신규 룰만 append
+        existing = HASH_RULES_PATH.read_text()
+        if rule_line not in existing:
+            with HASH_RULES_PATH.open("a") as rf:
+                rf.write(rule_line + "\n")
+            logger.info("Appended hash rule to %s", HASH_RULES_PATH)
+        else:
+            logger.debug("Hash rule already present; %s unchanged", HASH_RULES_PATH)
+
+    # 4) Suricata 룰 재로드
     _reload_suricata()

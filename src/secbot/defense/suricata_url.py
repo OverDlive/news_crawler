@@ -50,46 +50,38 @@ def _reload_suricata():
 
 def block_urls(urls: Iterable[str]) -> None:
     """
-    Rewrite URL-block rule file with unique URLs,
-    then reload Suricata.
+    Append new URL-block rules from *urls* to the rules file; then reload Suricata.
     """
-    # Prepare unique, sorted URL list
+    # 1) Normalize & de-dup
     uniq_urls = sorted({u.strip() for u in urls if u.strip()})
 
-    # 3) Ensure rules directory exists
+    # 2) Ensure rules directory exists
     URL_RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    # 4) Read existing rules to avoid duplicates
+    # 3) Read existing rules to avoid duplicates
     existing_urls = set()
     if URL_RULES_PATH.exists():
         with URL_RULES_PATH.open("r") as f_old:
             for line in f_old:
-                # Extract the URL from the msg field: msg:"SecBot malicious URL {url}";
-                try:
-                    # URL is between 'SecBot malicious URL ' and '";'
-                    part = line.split('msg:"SecBot malicious URL ', 1)[1]
-                    url_str = part.split('";', 1)[0]
-                    existing_urls.add(url_str)
-                except Exception:
-                    continue
+                if 'msg:"SecBot malicious URL ' in line:
+                    try:
+                        # URL is between 'SecBot malicious URL ' and '";'
+                        part = line.split('msg:"SecBot malicious URL ', 1)[1]
+                        url_str = part.split('";', 1)[0]
+                        existing_urls.add(url_str)
+                    except Exception:
+                        continue
 
-    # 5) Determine new URLs to write
+    # 4) Determine new URLs to write
     new_urls = [u for u in uniq_urls if u not in existing_urls]
 
-    if not URL_RULES_PATH.exists():
-        # If file does not exist, write all rules
-        mode = "w"
-        urls_to_write = uniq_urls
-    else:
-        # Append only new rules
-        mode = "a"
-        urls_to_write = new_urls
-
-    # 6) Write or append rules
-    if urls_to_write:
+    # 5) Write or append rules
+    if new_urls:
+        mode = "a" if URL_RULES_PATH.exists() else "w"
+        start_idx = len(existing_urls) + 1
         with URL_RULES_PATH.open(mode) as f:
-            for idx, url in enumerate(urls_to_write, start=BASE_SID_URL + (len(existing_urls) if mode == "a" else 0) - BASE_SID_URL + 1):
-                sid = BASE_SID_URL + idx
+            for i, url in enumerate(new_urls, start=start_idx):
+                sid = BASE_SID_URL + i
                 parsed = urlparse(url.replace("[:]", ":").replace("[.]", "."))
                 host = parsed.hostname or ""
                 path = unquote(parsed.path or "/")
@@ -102,9 +94,9 @@ def block_urls(urls: Iterable[str]) -> None:
                     f'sid:{sid}; rev:1;)'
                 )
                 f.write(rule + "\n")
-        logger.info("Appended %d new URL-block rule(s) to %s", len(urls_to_write), URL_RULES_PATH)
+        logger.info(f"Appended {len(new_urls)} new URL-block rule(s) to {URL_RULES_PATH}")
     else:
-        logger.debug("No new URLs to write; %s unchanged", URL_RULES_PATH)
+        logger.debug(f"No new URLs to write; {URL_RULES_PATH} unchanged")
 
-    # Reload Suricata to apply new rules
+    # 6) Reload Suricata to apply new rules
     _reload_suricata()

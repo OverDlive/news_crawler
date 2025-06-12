@@ -133,57 +133,48 @@ def _write_rules_file(ips: Iterable[str]) -> int:
     int
         최종 파일에 포함된 규칙의 총 IP 개수를 반환합니다.
     """
+    # 디렉터리 존재 보장
     RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    # 1) 입력된 IP 목록 정제 및 검증
-    new_ips = []
+    # 1) 입력된 IP 목록 정제 및 중복 제거
+    new_ips: list[str] = []
     for raw in ips:
         clean = _normalize_ip(raw)
         if clean and clean not in new_ips:
             new_ips.append(clean)
 
-    # 2) 기존 RULES_PATH에서 이미 기록된 IP 파싱
+    # 2) 기존 파일에서 이미 기록된 IP 파싱
     existing_ips: list[str] = []
     if RULES_PATH.exists():
         with RULES_PATH.open("r") as fh:
             for line in fh:
-                # 기존 룰 형식 두 가지를 모두 인식한다.
-                # 1) 옛 버전: "drop ip any any -> <IP> any" 및 반대 방향
-                # 2) 새 버전: "drop ip <IP> any <> any any"
                 parts = line.split()
                 if len(parts) < 3 or parts[0] != "drop" or parts[1] != "ip":
                     continue
-
+                # bidirectional ("<>") 또는 unidirectional ("->") 룰 처리
                 ip_token = None
                 if "<>" in parts:
-                    # bidirectional rule "drop ip <IP> any <> any any"
                     ip_token = parts[2]
                 elif "->" in parts:
                     arrow = parts.index("->")
-                    if arrow == 3:
-                        ip_token = parts[arrow + 1]
-                    elif arrow == 4:
-                        ip_token = parts[2]
-
+                    ip_token = parts[arrow + 1] if arrow == 3 else parts[2]
                 if ip_token:
                     clean = _normalize_ip(ip_token)
                     if clean and clean not in existing_ips:
                         existing_ips.append(clean)
 
-    # 3) 최종 IP 목록 결정: 기존 순서 유지, 새로운 IP는 뒤에 추가
-    final_ips: list[str] = existing_ips.copy()
+    # 3) 최종 IP 순서 결정 (기존 순서 유지 + 신규 IP 뒤에 추가)
+    final_ips = existing_ips.copy()
     for ip in new_ips:
         if ip not in existing_ips:
             final_ips.append(ip)
 
-    # 4) 신규 IP만 파일에 추가 (기존 IP는 유지)
+    # 4) 신규 IP만 append (기존 IP는 유지)
     if not RULES_PATH.exists():
-        # 파일이 없으면 최초 작성: write mode로 모든 final_ips 기록
         mode = "w"
         ips_to_write = final_ips
         start_index = 1
     else:
-        # 파일이 있으면 append mode로 새로운 IP만 기록
         mode = "a"
         ips_to_write = [ip for ip in final_ips if ip not in existing_ips]
         start_index = len(existing_ips) + 1
@@ -196,7 +187,8 @@ def _write_rules_file(ips: Iterable[str]) -> int:
                     f'drop ip {ip} any <> any any '
                     f'(msg:"SecBot malicious IP {ip}"; sid:{sid}; rev:1;)\n'
                 )
-        logger.info("Appended %d new Suricata IP‑block rule(s) to %s", len(ips_to_write), RULES_PATH)
+        logger.info("Appended %d new Suricata IP-block rule(s) to %s",
+                    len(ips_to_write), RULES_PATH)
     else:
         logger.debug("No new IPs to write; %s unchanged", RULES_PATH)
 
