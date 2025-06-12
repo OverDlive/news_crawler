@@ -1,11 +1,11 @@
 import time, sys, signal, argparse
 from secbot.scheduler import start_scheduler
 from secbot.utils.logger import setup as log_setup, get_logger
-from secbot.fetchers import news, advisory, asec
+from secbot.fetchers import news, advisory
 # Import the new IOC-extraction function
 from secbot.fetchers.asec import get_iocs_from_url
 from secbot.mailer.gmail import send_digest
-from secbot.defense import ipset, suricata
+from secbot.defense import suricata
 from secbot.defense import suricata_url, suricata_hash
 from secbot.config import settings
 
